@@ -28,7 +28,7 @@ const INITIAL_CAMERA_POSITION = {
   roll: 0,
 };
 // カメラ移動のアニメーション時間（秒）
-const CAMERA_FLY_DURATION = 0.0;
+const CAMERA_FLY_DURATION = 0.1;
 
 // カメラ移動速度の設定（メートル/秒）
 const CAMERA_MOVE_SPEED = 100.0;
@@ -84,7 +84,7 @@ const useCesium = (containerRef) => {
           timeline: false,
           animation: false,
           baseLayerPicker: false,
-          geocoder: false,
+          geocoder: true,
           homeButton: false,
           sceneModePicker: false,
           navigationHelpButton: false,
@@ -112,7 +112,7 @@ const useCesium = (containerRef) => {
             pitch: Cesium.Math.toRadians(INITIAL_CAMERA_POSITION.pitch),
             roll: Cesium.Math.toRadians(INITIAL_CAMERA_POSITION.roll),
           },
-          duration: 3,
+          duration: 1,
         });
 
         setViewer(mountedViewer);
@@ -219,7 +219,7 @@ const useCameraControls = (viewer) => {
 
     const handleCameraUpdate = () => {
       if (keyStates.size === 0) return;
-      const deltaTime = 1.0 / 60.0;
+      const deltaTime = 1.0;
       const moveRate = CAMERA_MOVE_SPEED * deltaTime;
       const verticalRate = CAMERA_VERTICAL_SPEED * deltaTime;
 
