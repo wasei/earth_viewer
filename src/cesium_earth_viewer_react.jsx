@@ -223,12 +223,77 @@ const useCameraControls = (viewer) => {
       const moveRate = CAMERA_MOVE_SPEED * deltaTime;
       const verticalRate = CAMERA_VERTICAL_SPEED * deltaTime;
 
-      if (keyStates.has("w")) camera.moveForward(moveRate);
-      if (keyStates.has("s")) camera.moveBackward(moveRate);
-      if (keyStates.has("a")) camera.moveLeft(moveRate);
-      if (keyStates.has("d")) camera.moveRight(moveRate);
-      if (keyStates.has("q")) camera.moveUp(verticalRate);
-      if (keyStates.has("e")) camera.moveDown(verticalRate);
+      // Cesiumのベクトル操作用ユーティリティを短縮
+      const C3 = Cesium.Cartesian3;
+
+      // 計算用のスクラッチ変数（パフォーマンス最適化のため）
+      const scratchLocalUp = new C3();
+      const scratchHorizontalDirection = new C3();
+      const scratchDirectionWC = new C3();
+
+      // -----------------------------------------------------------------------
+      // 1. 絶対的な垂直方向への移動 (Q/E)
+      // -----------------------------------------------------------------------
+      const localUp = C3.normalize(camera.positionWC, scratchLocalUp);
+
+      if (keyStates.has("q")) {
+        // Q: 上昇 (真上方向へ移動)
+        camera.move(localUp, verticalRate);
+      }
+      if (keyStates.has("e")) {
+        // E: 下降 (真下方向へ移動)
+        const localDown = C3.negate(localUp, new C3());
+        camera.move(localDown, verticalRate);
+      }
+
+      // -----------------------------------------------------------------------
+      // 2. 水平方向への平行移動 (A/D)
+      // -----------------------------------------------------------------------
+      const rightWC = camera.rightWC;
+
+      if (keyStates.has("a")) {
+        // A: 左移動 (rightWCの逆方向)
+        const leftWC = C3.negate(rightWC, new C3());
+        camera.move(leftWC, moveRate);
+      }
+      if (keyStates.has("d")) {
+        // D: 右移動 (rightWC方向)
+        camera.move(rightWC, moveRate);
+      }
+
+      // -----------------------------------------------------------------------
+      // 3. 純粋な水平方向への前後移動 (W/S)
+      // -----------------------------------------------------------------------
+      const currentDirectionWC = C3.clone(
+        camera.directionWC,
+        scratchDirectionWC
+      );
+
+      // 3b. 視線ベクトルから垂直成分を抽出（ドット積を使用）
+      const dotProduct = C3.dot(currentDirectionWC, localUp);
+      const verticalComponent = C3.multiplyByScalar(
+        localUp,
+        dotProduct,
+        new C3()
+      );
+
+      // 3c. 視線ベクトルから垂直成分を引いて、水平方向ベクトルを計算し、正規化する
+      const horizontalDirection = C3.subtract(
+        currentDirectionWC,
+        verticalComponent,
+        scratchHorizontalDirection
+      );
+      C3.normalize(horizontalDirection, horizontalDirection);
+
+      if (keyStates.has("w")) {
+        // W: 水平前進
+        camera.move(horizontalDirection, moveRate);
+      }
+      if (keyStates.has("s")) {
+        // S: 水平後退 (水平方向ベクトルの逆)
+        const horizontalBackward = C3.negate(horizontalDirection, new C3());
+        camera.move(horizontalBackward, moveRate);
+      }
     };
 
     container.addEventListener("keydown", handleKeyDown);
