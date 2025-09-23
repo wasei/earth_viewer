@@ -27,14 +27,11 @@ const INITIAL_CAMERA_POSITION = {
   pitch: -45,
   roll: 0,
 };
-// カメラ情報更新のスロットリング間隔 (ミリ秒)
-const CAMERA_UPDATE_THROTTLE = 100;
 // カメラ移動のアニメーション時間（秒）
-const CAMERA_FLY_DURATION = 1.5;
+const CAMERA_FLY_DURATION = 0.0;
 
 // カメラ移動速度の設定（メートル/秒）
 const CAMERA_MOVE_SPEED = 100.0;
-const CAMERA_ROTATE_SPEED = 0.5;
 const CAMERA_VERTICAL_SPEED = 50.0;
 
 // Cesiumのグローバル設定
@@ -63,57 +60,31 @@ const normalizeDegrees = (degrees) => ((degrees % 360) + 360) % 360;
 // =================================================================
 
 /**
- * Cesium Viewerの初期化と破棄を管理するカスタムフック
+ * Cesium Viewerの初期化と破棄を管理するカスタムフック。
+ * Viewerインスタンスをstateとして返し、初期化が完了するとコンポーネントを再レンダリングさせる。
  * @param {React.RefObject<HTMLDivElement>} containerRef - ViewerをマウントするDOM要素のref
- * @returns {React.MutableRefObject<Cesium.Viewer | null>} Viewerインスタンスを保持するref
+ * @returns {Cesium.Viewer | null} 初期化されたViewerインスタンス、または初期化中はnull
  */
 const useCesium = (containerRef) => {
-  const viewerRef = useRef(null);
+  const [viewer, setViewer] = useState(null);
 
   useEffect(() => {
-    console.log("useCesium useEffect started"); // Log: useEffect開始
-    if (!containerRef.current) {
-      console.log("containerRef is not yet available."); // Log: コンテナrefがまだない
+    if (!containerRef.current || viewer) {
       return;
     }
 
-    // スコープ外で変数を宣言
-    let viewer;
-    const keyStates = new Set();
-    let tickHandler;
-
-    // キーボードイベントハンドラ
-    const handleKeyDown = (event) => {
-      if (["w", "a", "s", "d", "q", "e"].includes(event.key.toLowerCase())) {
-        keyStates.add(event.key.toLowerCase());
-        event.preventDefault();
-      }
-    };
-
-    const handleKeyUp = (event) => {
-      if (["w", "a", "s", "d", "q", "e"].includes(event.key.toLowerCase())) {
-        keyStates.delete(event.key.toLowerCase());
-        event.preventDefault();
-      }
-    };
-
-    // キーボードイベントのリスナーを追加
-    document.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("keyup", handleKeyUp);
+    let mountedViewer;
 
     const initializeViewer = async () => {
       try {
-        console.log("Initializing Cesium Viewer..."); // Log: Viewer初期化開始
-        // Cesium World Terrain (地形データ) を非同期で生成
         const terrainProvider = await Cesium.createWorldTerrainAsync();
 
-        // Viewerインスタンスを生成
-        viewer = new Cesium.Viewer(containerRef.current, {
-          terrainProvider: terrainProvider,
+        mountedViewer = new Cesium.Viewer(containerRef.current, {
+          terrainProvider,
           timeline: false,
           animation: false,
           baseLayerPicker: false,
-          geocoder: true,
+          geocoder: false,
           homeButton: false,
           sceneModePicker: false,
           navigationHelpButton: false,
@@ -123,150 +94,14 @@ const useCesium = (containerRef) => {
           vrButton: false,
         });
 
-        console.log("Cesium Viewer initialized successfully.", viewer); // Log: Viewer初期化成功
+        mountedViewer.scene.globe.enableLighting = true;
 
-        // =================================================================
-        // カメラ制御の設定とキーボード操作の実装
-        // =================================================================
-        const sscController = viewer.scene.screenSpaceCameraController;
-        sscController.enableRotate = true; // マウス左ドラッグでの視点回転は有効
-        sscController.enableTranslate = false; // マウス中/右ドラッグでの並行移動は無効
-        sscController.enableZoom = false; // マウスホイールでのズームは無効
-        sscController.enableTilt = false; // マウス中/右ドラッグ+Ctrlでのチルトは無効
-
-        // カメラの初期設定
-        viewer.scene.globe.enableLighting = true;
-        viewer.camera.setView({
-          destination: Cesium.Cartesian3.fromDegrees(
-            INITIAL_CAMERA_POSITION.lon,
-            INITIAL_CAMERA_POSITION.lat,
-            INITIAL_CAMERA_POSITION.height
-          ),
-          orientation: {
-            heading: Cesium.Math.toRadians(INITIAL_CAMERA_POSITION.heading),
-            pitch: Cesium.Math.toRadians(INITIAL_CAMERA_POSITION.pitch),
-            roll: Cesium.Math.toRadians(INITIAL_CAMERA_POSITION.roll),
-          },
-        });
-
-        // キーボードイベントハンドラ
-        const handleKeyDown = (event) => {
-          if (
-            ["w", "a", "s", "d", "q", "e"].includes(event.key.toLowerCase())
-          ) {
-            keyStates.add(event.key.toLowerCase());
-            event.preventDefault();
-          }
-        };
-
-        const handleKeyUp = (event) => {
-          if (
-            ["w", "a", "s", "d", "q", "e"].includes(event.key.toLowerCase())
-          ) {
-            keyStates.delete(event.key.toLowerCase());
-            event.preventDefault();
-          }
-        };
-
-        // キーボードイベントのリスナーを追加
-        document.addEventListener("keydown", handleKeyDown);
-        document.addEventListener("keyup", handleKeyUp);
-
-        // カメラ移動を制御する関数
-        const handleCameraUpdate = () => {
-          const camera = viewer.camera;
-          const deltaTime = 1.0 / 60.0; // 60FPSを想定
-
-          // カメラの現在位置をCartographicに変換（緯度、経度、高度）
-          const cartographic = Cesium.Cartographic.fromCartesian(
-            camera.position
-          );
-
-          // 移動量を計算（メートル単位）
-          const moveRate = CAMERA_MOVE_SPEED * deltaTime;
-          const verticalRate = CAMERA_VERTICAL_SPEED * deltaTime;
-
-          // カメラの位置を更新する前の安全性チェック
-          if (!Cesium.defined(cartographic)) {
-            console.warn("Invalid camera position");
-            return;
-          }
-
-          // 現在の緯度、経度、高度を取得
-          let latitude = Cesium.Math.toDegrees(cartographic.latitude);
-          let longitude = Cesium.Math.toDegrees(cartographic.longitude);
-          let height = cartographic.height;
-
-          // WASDキーによる移動
-          // WASDキーによる移動（北を基準とした絶対方向）
-          if (keyStates.has("w")) {
-            // 北に移動（緯度を増加）
-            latitude -= moveRate / 111000.0; // 1度あたり約111km
-          }
-          if (keyStates.has("s")) {
-            // 南に移動（緯度を減少）
-            latitude += moveRate / 111000.0;
-          }
-          if (keyStates.has("d")) {
-            // 東に移動（経度を増加）
-            longitude -=
-              moveRate / (111000.0 * Math.cos(Cesium.Math.toRadians(latitude)));
-          }
-          if (keyStates.has("a")) {
-            // 西に移動（経度を減少）
-            longitude +=
-              moveRate / (111000.0 * Math.cos(Cesium.Math.toRadians(latitude)));
-          }
-
-          // QEキーによる上昇・下降
-          if (keyStates.has("q")) {
-            height += verticalRate;
-          }
-          if (keyStates.has("e")) {
-            height -= verticalRate;
-          }
-
-          // 新しい位置を設定
-          const newPosition = Cesium.Cartesian3.fromDegrees(
-            longitude,
-            latitude,
-            height
-          );
-          camera.position = newPosition;
-
-          // カメラの向きを計算（デフォルトは下向き）
-          const diff = Cesium.Cartesian3.subtract(
-            camera.position,
-            camera.positionWC,
-            new Cesium.Cartesian3()
-          );
-
-          // 位置の差分が十分にある場合のみ正規化を行う
-          if (Cesium.Cartesian3.magnitude(diff) > 1e-10) {
-            camera.direction = Cesium.Cartesian3.normalize(
-              diff,
-              new Cesium.Cartesian3()
-            );
-          } else {
-            // デフォルトの向き（下向き）を設定
-            camera.direction = new Cesium.Cartesian3(0, 0, -1);
-          }
-        };
-
-        // カメラ更新のイベントリスナーを追加
-        tickHandler = viewer.clock.onTick.addEventListener(handleCameraUpdate);
-
-        // Cesium OSM Buildings (3D建物データ) を非同期で取得し、シーンに追加
         const osmBuildingsTileset = await Cesium.Cesium3DTileset.fromIonAssetId(
           OSM_BUILDINGS_ASSET_ID
         );
-        viewer.scene.primitives.add(osmBuildingsTileset);
+        // mountedViewer.scene.primitives.add(osmBuildingsTileset);
 
-        // ライティングを有効化して建物を立体的に見せる
-        viewer.scene.globe.enableLighting = true;
-
-        // 初期視点へカメラを移動
-        viewer.camera.flyTo({
+        mountedViewer.camera.flyTo({
           destination: Cesium.Cartesian3.fromDegrees(
             INITIAL_CAMERA_POSITION.lon,
             INITIAL_CAMERA_POSITION.lat,
@@ -280,195 +115,135 @@ const useCesium = (containerRef) => {
           duration: 3,
         });
 
-        viewerRef.current = viewer;
-        tickHandler = viewer.clock.onTick.addEventListener(handleCameraUpdate);
+        setViewer(mountedViewer);
       } catch (error) {
-        console.error("Error initializing Cesium Viewer:", error); // Log: Viewer初期化エラー
+        console.error("Error initializing Cesium Viewer:", error);
       }
     };
 
     initializeViewer();
 
-    const currentViewer = viewerRef.current;
-    // コンポーネントのアンマウント時に実行されるクリーンアップ関数
     return () => {
-      console.log("Cleaning up useCesium effect."); // Log: クリーンアップ開始
-      document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("keyup", handleKeyUp);
-      if (viewer && !viewer.isDestroyed()) {
-        if (tickHandler) {
-          viewer.clock.onTick.removeEventListener(tickHandler);
-        }
-        viewer.destroy();
-        console.log("Cesium Viewer destroyed."); // Log: Viewer破棄
+      if (mountedViewer && !mountedViewer.isDestroyed()) {
+        mountedViewer.destroy();
       }
-      if (currentViewer) {
-        // クリーンアップ
-      }
-      viewerRef.current = null;
+      setViewer(null);
     };
-  }, [containerRef]); // containerRefの変更時のみ再実行
+  }, [containerRef]);
 
-  return viewerRef;
+  return viewer;
 };
 
 /**
- * カメラ情報の状態を管理し、定期的に更新するカスタムフック
- * @param {React.MutableRefObject<Cesium.Viewer | null>} viewerRef - Viewerインスタンスのref
+ * カメラ情報の状態を管理し、定期的に更新するカスタムフック。
+ * @param {Cesium.Viewer | null} viewer - Viewerインスタンス
  * @returns {object} 現在のカメラ情報
  */
-const useCameraInfo = (viewerRef) => {
+const useCameraInfo = (viewer) => {
   const [cameraInfo, setCameraInfo] = useState(INITIAL_CAMERA_POSITION);
 
   const updateCameraInfo = useCallback(() => {
-    if (!viewerRef.current) return;
-    const camera = viewerRef.current.camera;
+    if (!viewer) return;
+
+    const camera = viewer.camera;
     const cartographic = Cesium.Cartographic.fromCartesian(camera.position);
 
     if (cartographic) {
-      const newInfo = {
+      setCameraInfo({
         lon: Cesium.Math.toDegrees(cartographic.longitude),
         lat: Cesium.Math.toDegrees(cartographic.latitude),
         height: cartographic.height,
         heading: normalizeDegrees(Cesium.Math.toDegrees(camera.heading)),
         pitch: Cesium.Math.toDegrees(camera.pitch),
         roll: normalizeDegrees(Cesium.Math.toDegrees(camera.roll)),
-      };
-      setCameraInfo(newInfo);
-      console.log("Camera info updated:", newInfo); // Log: カメラ情報更新
+      });
     }
-  }, [viewerRef]);
+  }, [viewer]);
 
   useEffect(() => {
-    if (!viewerRef.current) return;
+    if (!viewer) return;
 
-    // レンダリングループの各フレームでカメラ情報を更新
-    const tickHandler =
-      viewerRef.current.clock.onTick.addEventListener(updateCameraInfo);
+    const tickHandler = viewer.clock.onTick.addEventListener(updateCameraInfo);
 
     return () => {
-      if (viewerRef.current && !viewerRef.current.isDestroyed()) {
-        viewerRef.current.clock.onTick.removeEventListener(tickHandler);
+      if (viewer && !viewer.isDestroyed()) {
+        viewer.clock.onTick.removeEventListener(tickHandler);
       }
     };
-  }, [viewerRef, updateCameraInfo]);
+  }, [viewer, updateCameraInfo]);
 
   return cameraInfo;
 };
 
 /**
- * カメラのキーボード操作を管理するカスタムフック
- * @param {React.MutableRefObject<Cesium.Viewer | null>} viewerRef - Viewerインスタンスのref
+ * カメラのキーボード操作を管理するカスタムフック。
+ * @param {Cesium.Viewer | null} viewer - Viewerインスタンス
  */
-const useCameraControls = (viewerRef) => {
+const useCameraControls = (viewer) => {
   useEffect(() => {
-    const viewer = viewerRef.current;
-    if (!viewer) return;
+    if (!viewer) {
+      return;
+    }
+
+    const container = viewer.container;
+    container.setAttribute("tabIndex", "0");
+    container.style.outline = "none";
+    container.onclick = () => {
+      container.focus();
+    };
 
     const keyStates = new Set();
+    const camera = viewer.camera;
+
+    const sscController = viewer.scene.screenSpaceCameraController;
+    sscController.enableRotate = true;
+    sscController.enableTranslate = true;
+    sscController.enableZoom = true;
+    sscController.enableTilt = true;
 
     const handleKeyDown = (event) => {
-      keyStates.add(event.key.toLowerCase());
-      if (["w", "a", "s", "d", "q", "e"].includes(event.key.toLowerCase())) {
+      const key = event.key.toLowerCase();
+      if (["w", "a", "s", "d", "q", "e"].includes(key)) {
         event.preventDefault();
+        keyStates.add(key);
       }
     };
 
     const handleKeyUp = (event) => {
-      keyStates.delete(event.key.toLowerCase());
-      if (["w", "a", "s", "d", "q", "e"].includes(event.key.toLowerCase())) {
+      const key = event.key.toLowerCase();
+      if (["w", "a", "s", "d", "q", "e"].includes(key)) {
         event.preventDefault();
+        keyStates.delete(key);
       }
     };
 
     const handleCameraUpdate = () => {
-      if (!viewer || viewer.isDestroyed()) return;
-
-      const camera = viewer.camera;
-      if (!camera) return;
-
-      const deltaTime = 1.0 / 60.0; // 60FPSを想定
+      if (keyStates.size === 0) return;
+      const deltaTime = 1.0 / 60.0;
       const moveRate = CAMERA_MOVE_SPEED * deltaTime;
-      const heightRate = CAMERA_VERTICAL_SPEED * deltaTime;
+      const verticalRate = CAMERA_VERTICAL_SPEED * deltaTime;
 
-      try {
-        // 現在のカメラ位置を取得
-        const cartesian = camera.position;
-        const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
-        if (!cartographic) return;
-
-        // 現在の座標を取得
-        let latitude = Cesium.Math.toDegrees(cartographic.latitude);
-        let longitude = Cesium.Math.toDegrees(cartographic.longitude);
-        let height = cartographic.height;
-
-        // 移動計算
-        let hasMovement = false;
-
-        if (keyStates.has("w")) {
-          latitude += moveRate / 111111.0; // 北へ
-          hasMovement = true;
-        }
-        if (keyStates.has("s")) {
-          latitude -= moveRate / 111111.0; // 南へ
-          hasMovement = true;
-        }
-        if (keyStates.has("d")) {
-          const metersPerDegree =
-            111111.0 * Math.cos(Cesium.Math.toRadians(latitude));
-          longitude += moveRate / metersPerDegree; // 東へ
-          hasMovement = true;
-        }
-        if (keyStates.has("a")) {
-          const metersPerDegree =
-            111111.0 * Math.cos(Cesium.Math.toRadians(latitude));
-          longitude -= moveRate / metersPerDegree; // 西へ
-          hasMovement = true;
-        }
-        if (keyStates.has("q")) {
-          height = Math.min(10000, height + heightRate); // 上昇（最高10000m）
-          hasMovement = true;
-        }
-        if (keyStates.has("e")) {
-          height = Math.max(100, height - heightRate); // 下降（最低100m）
-          hasMovement = true;
-        }
-
-        // 移動がある場合のみカメラを更新
-        if (hasMovement) {
-          camera.setView({
-            destination: Cesium.Cartesian3.fromDegrees(
-              longitude,
-              latitude,
-              height
-            ),
-            orientation: {
-              heading: camera.heading,
-              pitch: camera.pitch,
-              roll: camera.roll,
-            },
-          });
-        }
-      } catch (error) {
-        console.warn("Camera update error:", error);
-      }
+      if (keyStates.has("w")) camera.moveForward(moveRate);
+      if (keyStates.has("s")) camera.moveBackward(moveRate);
+      if (keyStates.has("a")) camera.moveLeft(moveRate);
+      if (keyStates.has("d")) camera.moveRight(moveRate);
+      if (keyStates.has("q")) camera.moveUp(verticalRate);
+      if (keyStates.has("e")) camera.moveDown(verticalRate);
     };
 
-    // イベントリスナーを追加
-    document.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("keyup", handleKeyUp);
+    container.addEventListener("keydown", handleKeyDown);
+    container.addEventListener("keyup", handleKeyUp);
     const tickListener =
       viewer.clock.onTick.addEventListener(handleCameraUpdate);
 
-    // クリーンアップ関数を返す
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("keyup", handleKeyUp);
+      container.removeEventListener("keydown", handleKeyDown);
+      container.removeEventListener("keyup", handleKeyUp);
       if (viewer && !viewer.isDestroyed()) {
         viewer.clock.onTick.removeEventListener(tickListener);
       }
     };
-  }, [viewerRef]); // Viewerが変更された場合にのみ再設定
+  }, [viewer]); // viewerインスタンスが利用可能になったらエフェクトを実行
 };
 
 // =================================================================
@@ -479,51 +254,47 @@ export default function CesiumEarthViewer() {
   const containerRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // カスタムフックを使用してCesiumの各機能を管理
-  const viewerRef = useCesium(containerRef);
-  const cameraInfo = useCameraInfo(viewerRef);
-  // ★修正: useCameraControlsはUIを返さなくなったので、呼び出しのみ
-  useCameraControls(viewerRef);
+  // useCesiumフックはviewerインスタンスをstateとして返す
+  const viewer = useCesium(containerRef);
+  // viewerインスタンスを直接他のフックに渡す
+  const cameraInfo = useCameraInfo(viewer);
+  useCameraControls(viewer);
 
-  // 保存されたカメラ位置の状態
   const [savedCameras, setSavedCameras] = useState([]);
 
-  // =================================================================
-  // ★修正: useCallbackを削除し、常に最新のviewerRefを参照できるようにする
-  // =================================================================
-  const restoreCamera = (cameraObj) => {
-    const viewer = viewerRef.current;
-    if (!viewer) return;
+  const restoreCamera = useCallback(
+    (cameraObj) => {
+      // viewerインスタンスが準備できていなければ何もしない
+      if (!viewer) return;
 
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        cameraObj.lon,
-        cameraObj.lat,
-        cameraObj.height
-      ),
-      orientation: {
-        heading: Cesium.Math.toRadians(cameraObj.heading),
-        pitch: Cesium.Math.toRadians(cameraObj.pitch),
-        roll: Cesium.Math.toRadians(cameraObj.roll),
-      },
-      duration: CAMERA_FLY_DURATION,
-    });
-  };
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(
+          cameraObj.lon,
+          cameraObj.lat,
+          cameraObj.height
+        ),
+        orientation: {
+          heading: Cesium.Math.toRadians(cameraObj.heading),
+          pitch: Cesium.Math.toRadians(cameraObj.pitch),
+          roll: Cesium.Math.toRadians(cameraObj.roll),
+        },
+        duration: CAMERA_FLY_DURATION,
+      });
+    },
+    [viewer] // viewerを依存配列に追加
+  );
 
+  // (省略) ... 他の関数は変更なし
   const handleSaveCurrent = useCallback(() => {
     const name = prompt(
       "このビューの名前を入力してください:",
       `ビュー ${savedCameras.length + 1}`
     );
     if (name) {
-      const newCamera = {
-        id: Date.now(),
-        name,
-        ...cameraInfo,
-      };
+      const newCamera = { id: Date.now(), name, ...cameraInfo };
       setSavedCameras((prev) => [...prev, newCamera]);
     }
-  }, [cameraInfo, savedCameras.length]);
+  }, [cameraInfo, savedCameras]);
 
   const exportKML = useCallback(() => {
     if (savedCameras.length === 0) {
@@ -533,9 +304,7 @@ export default function CesiumEarthViewer() {
 
     const kmlPlacemarks = savedCameras
       .map((cam) => {
-        // Cesiumのpitch(-90 to 90)をKMLのtilt(0 to 90)に変換
         const tilt = Math.abs(cam.pitch - 90);
-        // heightからrangeを概算
         const range =
           cam.height / Math.cos(Cesium.Math.toRadians(Math.abs(cam.pitch)));
 
@@ -613,7 +382,6 @@ export default function CesiumEarthViewer() {
               lookAt.querySelector("tilt")?.textContent || 0
             );
 
-            // KMLのtilt(0 to 90)をCesiumのpitch(-90 to 0)に変換
             const pitch = tilt - 90;
 
             return {
@@ -627,7 +395,7 @@ export default function CesiumEarthViewer() {
               roll: 0,
             };
           })
-          .filter(Boolean); // nullを除外
+          .filter(Boolean);
 
         setSavedCameras((prev) => [...prev, ...newCameras]);
         alert(`${newCameras.length}個のビューをインポートしました。`);
@@ -648,29 +416,27 @@ export default function CesiumEarthViewer() {
     }
   }, []);
 
-  // ファイル選択ダイアログを開くハンドラ
   const handleImportClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
-  // ファイルが選択されたときのハンドラ
   const handleFileChange = useCallback(
     (e) => {
       const file = e.target.files?.[0];
       if (file) {
         importKML(file);
       }
-      // 同じファイルを連続で選択できるように値をリセット
       e.target.value = "";
     },
     [importKML]
   );
 
-  // 表示用のカメラ情報をメモ化
   const displayInfo = useMemo(
     () => ({
       ...cameraInfo,
       height: Math.round(cameraInfo.height),
+      heading: Math.round(cameraInfo.heading),
+      pitch: Math.round(cameraInfo.pitch),
     }),
     [cameraInfo]
   );
@@ -678,27 +444,17 @@ export default function CesiumEarthViewer() {
   return (
     <div className="cesium-app-root">
       <div className="topbar">
-        {/* カメラ情報の表示 */}
-        <div>緯度: {displayInfo.lat}</div>
-        <div>経度: {displayInfo.lon}</div>
+        <div>緯度: {displayInfo.lat.toFixed(6)}</div>
+        <div>経度: {displayInfo.lon.toFixed(6)}</div>
         <div>高度: {displayInfo.height}m</div>
         <div>方位: {displayInfo.heading}°</div>
         <div>ピッチ: {displayInfo.pitch}°</div>
 
-        {/* 操作パネル */}
-        <div
-          style={{
-            marginLeft: "auto",
-            display: "flex",
-            gap: "8px",
-            alignItems: "center",
-          }}
-        >
-          {/* ★修正: 移動速度のUIを削除 */}
+        <div className="controls">
           <button onClick={handleSaveCurrent}>保存</button>
           <input
             type="file"
-            accept=".kml,.kmz"
+            accept=".kml"
             ref={fileInputRef}
             hidden
             onChange={handleFileChange}
@@ -710,10 +466,8 @@ export default function CesiumEarthViewer() {
         </div>
       </div>
 
-      {/* Cesiumビューアーのコンテナ */}
-      <div ref={containerRef} id="cesiumContainer" />
+      <div ref={containerRef} id="cesiumContainer" tabIndex={0} />
 
-      {/* 保存済み視点リスト */}
       <div className="saved-list">
         {savedCameras.length > 0 ? (
           savedCameras.map((s) => (
