@@ -1,4 +1,4 @@
-// cesium_earth_viewer_react.jsx
+// cesium_earth_viewer_react_fixed.jsx
 import React, {
   useEffect,
   useRef,
@@ -14,11 +14,8 @@ import "cesium/Build/Cesium/Widgets/widgets.css";
 // 定数とグローバル設定
 // =================================================================
 
-// Cesium Ionのアクセストークンを環境変数から読み込み
 const CESIUM_ION_ACCESS_TOKEN = import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN;
-// Cesium OSM BuildingsのIONアセットID
 const OSM_BUILDINGS_ASSET_ID = 96188;
-// カメラの初期位置 (東京駅周辺)
 const INITIAL_CAMERA_POSITION = {
   lon: 139.767052,
   lat: 35.681167,
@@ -27,14 +24,10 @@ const INITIAL_CAMERA_POSITION = {
   pitch: -45,
   roll: 0,
 };
-// カメラ移動のアニメーション時間（秒）
 const CAMERA_FLY_DURATION = 0.1;
-
-// カメラ移動速度の設定（メートル/秒）
 const CAMERA_MOVE_SPEED = 100.0;
 const CAMERA_VERTICAL_SPEED = 50.0;
 
-// Cesiumのグローバル設定
 window.CESIUM_BASE_URL = "/Cesium/";
 if (CESIUM_ION_ACCESS_TOKEN) {
   Cesium.Ion.defaultAccessToken = CESIUM_ION_ACCESS_TOKEN;
@@ -48,23 +41,12 @@ if (CESIUM_ION_ACCESS_TOKEN) {
 // ヘルパー関数
 // =================================================================
 
-/**
- * 角度を 0-360 の範囲に正規化します。
- * @param {number} degrees - 正規化する角度
- * @returns {number} 0から360の間の角度
- */
 const normalizeDegrees = (degrees) => ((degrees % 360) + 360) % 360;
 
 // =================================================================
 // カスタムフック
 // =================================================================
 
-/**
- * Cesium Viewerの初期化と破棄を管理するカスタムフック。
- * Viewerインスタンスをstateとして返し、初期化が完了するとコンポーネントを再レンダリングさせる。
- * @param {React.RefObject<HTMLDivElement>} containerRef - ViewerをマウントするDOM要素のref
- * @returns {Cesium.Viewer | null} 初期化されたViewerインスタンス、または初期化中はnull
- */
 const useCesium = (containerRef) => {
   const [viewer, setViewer] = useState(null);
 
@@ -92,9 +74,15 @@ const useCesium = (containerRef) => {
           selectionIndicator: false,
           fullscreenButton: true,
           vrButton: false,
+          requestRenderMode: false, // 連続レンダリングを有効にする
+          maximumRenderTimeChange: Infinity, // レンダリング制限を無効化
         });
 
         mountedViewer.scene.globe.enableLighting = true;
+
+        // 追加のレンダリング設定
+        mountedViewer.scene.requestRenderMode = false;
+        mountedViewer.scene.maximumRenderTimeChange = Infinity;
 
         const osmBuildingsTileset = await Cesium.Cesium3DTileset.fromIonAssetId(
           OSM_BUILDINGS_ASSET_ID
@@ -127,23 +115,17 @@ const useCesium = (containerRef) => {
       if (mountedViewer && !mountedViewer.isDestroyed()) {
         mountedViewer.destroy();
       }
-      setViewer(null);
     };
   }, [containerRef]);
 
   return viewer;
 };
 
-/**
- * カメラ情報の状態を管理し、定期的に更新するカスタムフック。
- * @param {Cesium.Viewer | null} viewer - Viewerインスタンス
- * @returns {object} 現在のカメラ情報
- */
 const useCameraInfo = (viewer) => {
   const [cameraInfo, setCameraInfo] = useState(INITIAL_CAMERA_POSITION);
 
   const updateCameraInfo = useCallback(() => {
-    if (!viewer) return;
+    if (!viewer || viewer.isDestroyed()) return;
 
     const camera = viewer.camera;
     const cartographic = Cesium.Cartographic.fromCartesian(camera.position);
@@ -163,11 +145,17 @@ const useCameraInfo = (viewer) => {
   useEffect(() => {
     if (!viewer) return;
 
+    // より高頻度でカメラ情報を更新
     const tickHandler = viewer.clock.onTick.addEventListener(updateCameraInfo);
+
+    // 追加：カメラ移動イベントのリスナーも追加
+    const cameraMoveHandler =
+      viewer.camera.changed.addEventListener(updateCameraInfo);
 
     return () => {
       if (viewer && !viewer.isDestroyed()) {
         viewer.clock.onTick.removeEventListener(tickHandler);
+        viewer.camera.changed.removeEventListener(cameraMoveHandler);
       }
     };
   }, [viewer, updateCameraInfo]);
@@ -175,10 +163,6 @@ const useCameraInfo = (viewer) => {
   return cameraInfo;
 };
 
-/**
- * カメラのキーボード操作を管理するカスタムフック。
- * @param {Cesium.Viewer | null} viewer - Viewerインスタンス
- */
 const useCameraControls = (viewer) => {
   useEffect(() => {
     if (!viewer) {
@@ -188,96 +172,99 @@ const useCameraControls = (viewer) => {
     const container = viewer.container;
     container.setAttribute("tabIndex", "0");
     container.style.outline = "none";
-    container.onclick = () => {
+
+    // フォーカスを確実に設定
+    const handleContainerClick = () => {
       container.focus();
+      console.log("Container focused"); // デバッグ用
     };
+
+    container.addEventListener("click", handleContainerClick);
+    // 初期フォーカス設定
+    setTimeout(() => container.focus(), 100);
 
     const keyStates = new Set();
     const camera = viewer.camera;
 
-    const sscController = viewer.scene.screenSpaceCameraController;
-    sscController.enableRotate = true;
-    sscController.enableTranslate = true;
-    sscController.enableZoom = true;
-    sscController.enableTilt = true;
-
     const handleKeyDown = (event) => {
       const key = event.key.toLowerCase();
+      console.log("Key down:", key); // デバッグ用
       if (["w", "a", "s", "d", "q", "e"].includes(key)) {
         event.preventDefault();
+        event.stopPropagation();
         keyStates.add(key);
+        console.log("Active keys:", Array.from(keyStates)); // デバッグ用
       }
     };
 
     const handleKeyUp = (event) => {
       const key = event.key.toLowerCase();
+      console.log("Key up:", key); // デバッグ用
       if (["w", "a", "s", "d", "q", "e"].includes(key)) {
         event.preventDefault();
+        event.stopPropagation();
         keyStates.delete(key);
+        console.log("Active keys:", Array.from(keyStates)); // デバッグ用
       }
     };
 
     const handleCameraUpdate = () => {
+      if (!viewer || viewer.isDestroyed()) return;
       if (keyStates.size === 0) return;
-      const deltaTime = 1.0;
-      const moveRate = CAMERA_MOVE_SPEED * deltaTime;
-      const verticalRate = CAMERA_VERTICAL_SPEED * deltaTime;
 
-      // Cesiumのベクトル操作用ユーティリティを短縮
+      console.log("Camera update with keys:", Array.from(keyStates)); // デバッグ用
+
+      const moveRate = CAMERA_MOVE_SPEED;
+      const verticalRate = CAMERA_VERTICAL_SPEED;
+
+      // 元の実装を復元：水平・垂直移動の実装
       const C3 = Cesium.Cartesian3;
-
-      // 計算用のスクラッチ変数（パフォーマンス最適化のため）
       const scratchLocalUp = new C3();
       const scratchHorizontalDirection = new C3();
       const scratchDirectionWC = new C3();
-
-      // -----------------------------------------------------------------------
-      // 1. 絶対的な垂直方向への移動 (Q/E)
-      // -----------------------------------------------------------------------
       const localUp = C3.normalize(camera.positionWC, scratchLocalUp);
 
+      // 移動フラグ
+      let moved = false;
+
+      // 垂直移動（Q/E）- 地球の中心から見た上下方向
       if (keyStates.has("q")) {
-        // Q: 上昇 (真上方向へ移動)
+        console.log("Moving up"); // デバッグ用
         camera.move(localUp, verticalRate);
+        moved = true;
       }
       if (keyStates.has("e")) {
-        // E: 下降 (真下方向へ移動)
+        console.log("Moving down"); // デバッグ用
         const localDown = C3.negate(localUp, new C3());
         camera.move(localDown, verticalRate);
+        moved = true;
       }
 
-      // -----------------------------------------------------------------------
-      // 2. 水平方向への平行移動 (A/D)
-      // -----------------------------------------------------------------------
+      // 左右移動（A/D）
       const rightWC = camera.rightWC;
-
       if (keyStates.has("a")) {
-        // A: 左移動 (rightWCの逆方向)
+        console.log("Moving left"); // デバッグ用
         const leftWC = C3.negate(rightWC, new C3());
         camera.move(leftWC, moveRate);
+        moved = true;
       }
       if (keyStates.has("d")) {
-        // D: 右移動 (rightWC方向)
+        console.log("Moving right"); // デバッグ用
         camera.move(rightWC, moveRate);
+        moved = true;
       }
 
-      // -----------------------------------------------------------------------
-      // 3. 純粋な水平方向への前後移動 (W/S)
-      // -----------------------------------------------------------------------
+      // 前後移動（W/S）- 水平方向のみ
       const currentDirectionWC = C3.clone(
         camera.directionWC,
         scratchDirectionWC
       );
-
-      // 3b. 視線ベクトルから垂直成分を抽出（ドット積を使用）
       const dotProduct = C3.dot(currentDirectionWC, localUp);
       const verticalComponent = C3.multiplyByScalar(
         localUp,
         dotProduct,
         new C3()
       );
-
-      // 3c. 視線ベクトルから垂直成分を引いて、水平方向ベクトルを計算し、正規化する
       const horizontalDirection = C3.subtract(
         currentDirectionWC,
         verticalComponent,
@@ -286,29 +273,62 @@ const useCameraControls = (viewer) => {
       C3.normalize(horizontalDirection, horizontalDirection);
 
       if (keyStates.has("w")) {
-        // W: 水平前進
+        console.log("Moving forward"); // デバッグ用
         camera.move(horizontalDirection, moveRate);
+        moved = true;
       }
       if (keyStates.has("s")) {
-        // S: 水平後退 (水平方向ベクトルの逆)
+        console.log("Moving backward"); // デバッグ用
         const horizontalBackward = C3.negate(horizontalDirection, new C3());
         camera.move(horizontalBackward, moveRate);
+        moved = true;
+      }
+
+      // カメラが移動した場合、手動でレンダリング更新を強制
+      if (moved) {
+        // カメラの変更イベントを強制的に発火
+        camera.changed.raiseEvent();
+        // シーンのレンダリングをリクエスト
+        viewer.scene.requestRender();
+        // 追加の更新処理
+        viewer.scene.camera._changed.raiseEvent();
+        console.log("Forced render update"); // デバッグ用
       }
     };
 
+    // documentレベルでもキーイベントをキャッチ
+    const handleDocumentKeyDown = (event) => {
+      if (document.activeElement === container) {
+        handleKeyDown(event);
+      }
+    };
+
+    const handleDocumentKeyUp = (event) => {
+      if (document.activeElement === container) {
+        handleKeyUp(event);
+      }
+    };
+
+    // イベントリスナーを追加
     container.addEventListener("keydown", handleKeyDown);
     container.addEventListener("keyup", handleKeyUp);
+    document.addEventListener("keydown", handleDocumentKeyDown);
+    document.addEventListener("keyup", handleDocumentKeyUp);
+
     const tickListener =
       viewer.clock.onTick.addEventListener(handleCameraUpdate);
 
     return () => {
+      container.removeEventListener("click", handleContainerClick);
       container.removeEventListener("keydown", handleKeyDown);
       container.removeEventListener("keyup", handleKeyUp);
+      document.removeEventListener("keydown", handleDocumentKeyDown);
+      document.removeEventListener("keyup", handleDocumentKeyUp);
       if (viewer && !viewer.isDestroyed()) {
         viewer.clock.onTick.removeEventListener(tickListener);
       }
     };
-  }, [viewer]); // viewerインスタンスが利用可能になったらエフェクトを実行
+  }, [viewer]);
 };
 
 // =================================================================
@@ -319,9 +339,7 @@ export default function CesiumEarthViewer() {
   const containerRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // useCesiumフックはviewerインスタンスをstateとして返す
   const viewer = useCesium(containerRef);
-  // viewerインスタンスを直接他のフックに渡す
   const cameraInfo = useCameraInfo(viewer);
   useCameraControls(viewer);
 
@@ -329,7 +347,6 @@ export default function CesiumEarthViewer() {
 
   const restoreCamera = useCallback(
     (cameraObj) => {
-      // viewerインスタンスが準備できていなければ何もしない
       if (!viewer) return;
 
       viewer.camera.flyTo({
@@ -346,10 +363,9 @@ export default function CesiumEarthViewer() {
         duration: CAMERA_FLY_DURATION,
       });
     },
-    [viewer] // viewerを依存配列に追加
+    [viewer]
   );
 
-  // (省略) ... 他の関数は変更なし
   const handleSaveCurrent = useCallback(() => {
     const name = prompt(
       "このビューの名前を入力してください:",
