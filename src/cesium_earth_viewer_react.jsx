@@ -17,7 +17,7 @@ import "cesium/Build/Cesium/Widgets/widgets.css";
 // .envファイルからCesium Ionのアクセストークンを読み込む
 const CESIUM_ION_ACCESS_TOKEN = import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN;
 // OpenStreetMap 3D Buildings のアセットID
-const OSM_BUILDINGS_ASSET_ID = 96188;
+const OSM_BUILDINGS_ASSET_ID = 2275207;
 
 // カメラの初期位置（東京駅周辺）
 const INITIAL_CAMERA_POSITION = {
@@ -27,6 +27,7 @@ const INITIAL_CAMERA_POSITION = {
   heading: 0,
   pitch: -45,
   roll: 0,
+  fov: 60, // ★ 追加: 初期画角（度）
 };
 
 // カメラの移動アニメーション時間
@@ -86,7 +87,7 @@ const useCesium = (containerRef) => {
           timeline: false,
           animation: false,
           baseLayerPicker: false,
-          geocoder: false,
+          geocoder: true,
           homeButton: false,
           sceneModePicker: false,
           navigationHelpButton: false,
@@ -94,9 +95,6 @@ const useCesium = (containerRef) => {
           selectionIndicator: false,
           fullscreenButton: false,
           vrButton: false,
-          // 常にレンダリングを続けるモードに設定
-          requestRenderMode: false,
-          maximumRenderTimeChange: Infinity,
         });
 
         mountedViewer.scene.globe.enableLighting = true;
@@ -129,6 +127,11 @@ const useCesium = (containerRef) => {
           },
           duration: 1.5,
         });
+
+        // ★ 追加: カメラの画角を初期値に設定
+        mountedViewer.camera.frustum.fov = Cesium.Math.toRadians(
+          INITIAL_CAMERA_POSITION.fov
+        );
 
         setViewer(mountedViewer);
       } catch (error) {
@@ -173,6 +176,7 @@ const useCameraInfo = (viewer) => {
         heading: normalizeDegrees(Cesium.Math.toDegrees(camera.heading)),
         pitch: Cesium.Math.toDegrees(camera.pitch),
         roll: normalizeDegrees(Cesium.Math.toDegrees(camera.roll)),
+        fov: Cesium.Math.toDegrees(camera.frustum.fov), // ★ 追加: 現在の画角を取得
       });
     }
   }, [viewer]);
@@ -573,6 +577,17 @@ export default function CesiumEarthViewer() {
     }
   }, []);
 
+  // ★ 追加: 画角変更スライダーのイベントハンドラ
+  const handleFovChange = useCallback(
+    (e) => {
+      if (!viewer) return;
+      const newFovDegrees = parseFloat(e.target.value);
+      // Cesiumのカメラの画角はラジアン単位なので変換して設定
+      viewer.camera.frustum.fov = Cesium.Math.toRadians(newFovDegrees);
+    },
+    [viewer]
+  );
+
   // 表示用に数値を丸める
   const displayInfo = useMemo(
     () => ({
@@ -580,6 +595,7 @@ export default function CesiumEarthViewer() {
       height: Math.round(cameraInfo.height),
       heading: Math.round(cameraInfo.heading),
       pitch: Math.round(cameraInfo.pitch),
+      fov: Math.round(cameraInfo.fov), // ★ 追加: 画角を丸める
     }),
     [cameraInfo]
   );
@@ -592,6 +608,24 @@ export default function CesiumEarthViewer() {
         <div>高度: {displayInfo.height}m</div>
         <div>方位: {displayInfo.heading}°</div>
         <div>ピッチ: {displayInfo.pitch}°</div>
+        {/* ★ 修正: 画角表示とスライダーを追加 */}
+        <div
+          className="fov-control"
+          style={{ display: "flex", alignItems: "center", gap: "8px" }}
+        >
+          <label htmlFor="fov-slider">画角: {displayInfo.fov}°</label>
+          <input
+            id="fov-slider"
+            type="range"
+            min="10"
+            max="120"
+            step="1"
+            value={displayInfo.fov}
+            onChange={handleFovChange}
+            title="カメラの画角を変更"
+            style={{ width: "100px" }}
+          />
+        </div>
 
         <div className="controls">
           <button onClick={handleSaveCurrent}>現在地を保存</button>
