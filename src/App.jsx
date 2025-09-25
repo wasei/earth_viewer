@@ -57,7 +57,6 @@ export default function App() {
     [viewer]
   );
 
-  // --- ▼ここから修正▼ ---
   const handleSaveCurrent = useCallback(() => {
     if (!viewer) return;
 
@@ -85,8 +84,7 @@ export default function App() {
       const newCamera = { id: Date.now(), name, ...currentCameraState };
       setSavedCameras((prev) => [...prev, newCamera]);
     }
-  }, [viewer, savedCameras]); // 依存配列を cameraInfo から viewer に変更
-  // --- ▲ここまで修正▲ ---
+  }, [viewer, savedCameras]);
 
   const exportKML = useCallback(() => {
     if (savedCameras.length === 0) {
