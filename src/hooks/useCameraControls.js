@@ -1,13 +1,13 @@
 // src/hooks/useCameraControls.js
 import { useEffect } from "react";
 import * as Cesium from "cesium";
-import { CAMERA_MOVE_SPEED, CAMERA_VERTICAL_SPEED } from "../constants";
 
 /**
  * キーボードとマウスによるカメラ操作を実装するカスタムフック
  * @param {Cesium.Viewer | null} viewer - Viewerインスタンス
+ * @param {number} cameraSpeed - カメラの移動速度
  */
-export const useCameraControls = (viewer) => {
+export const useCameraControls = (viewer, cameraSpeed) => {
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) {
       return;
@@ -87,8 +87,8 @@ export const useCameraControls = (viewer) => {
       }
       // 2. キーボードによるカメラ移動
       if (keyStates.size > 0) {
-        const moveRate = CAMERA_MOVE_SPEED;
-        const verticalRate = CAMERA_VERTICAL_SPEED;
+        const moveRate = cameraSpeed;
+        const verticalRate = cameraSpeed;
         const C3 = Cesium.Cartesian3;
         const localUp = C3.normalize(camera.positionWC, new C3());
         if (keyStates.has("q")) camera.move(localUp, verticalRate);
@@ -127,5 +127,5 @@ export const useCameraControls = (viewer) => {
         handler.destroy();
       }
     };
-  }, [viewer]);
+  }, [viewer, cameraSpeed]);
 };

@@ -11,7 +11,11 @@ import CameraInfoPanel from "./components/CameraInfoPanel";
 import ControlPanel from "./components/ControlPanel";
 import SavedViewsPanel from "./components/SavedViewsPanel";
 
-import { setupCesium, CAMERA_FLY_DURATION } from "./constants";
+import {
+  setupCesium,
+  CAMERA_FLY_DURATION,
+  CAMERA_MOVE_SPEED,
+} from "./constants";
 import "./styles/App.css";
 
 // アプリケーションの初期化処理
@@ -21,10 +25,11 @@ export default function App() {
   const containerRef = useRef(null);
   const fileInputRef = useRef(null);
   const [savedCameras, setSavedCameras] = useState([]);
+  const [cameraSpeed, setCameraSpeed] = useState(CAMERA_MOVE_SPEED);
 
   const viewer = useCesium(containerRef);
   const cameraInfo = useCameraInfo(viewer);
-  useCameraControls(viewer);
+  useCameraControls(viewer, cameraSpeed);
 
   const restoreCamera = useCallback(
     (cameraObj) => {
@@ -181,10 +186,19 @@ export default function App() {
     }
   }, []);
 
+  const handleSpeedChange = useCallback((newSpeed) => {
+    setCameraSpeed(newSpeed);
+  }, []);
+
   return (
     <div className="cesium-app-root">
       <div className="topbar">
-        <CameraInfoPanel cameraInfo={cameraInfo} viewer={viewer} />
+        <CameraInfoPanel
+          cameraInfo={cameraInfo}
+          viewer={viewer}
+          cameraSpeed={cameraSpeed}
+          onSpeedChange={handleSpeedChange}
+        />
         <ControlPanel
           ref={fileInputRef}
           onSave={handleSaveCurrent}

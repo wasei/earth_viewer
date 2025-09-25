@@ -2,7 +2,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import * as Cesium from "cesium";
 
-export default function CameraInfoPanel({ cameraInfo, viewer }) {
+export default function CameraInfoPanel({
+  cameraInfo,
+  viewer,
+  cameraSpeed,
+  onSpeedChange,
+}) {
   const [sliderFov, setSliderFov] = useState(cameraInfo.fov);
 
   useEffect(() => {
@@ -18,6 +23,14 @@ export default function CameraInfoPanel({ cameraInfo, viewer }) {
       viewer.camera.frustum.fov = Cesium.Math.toRadians(newFovDegrees);
     },
     [viewer, setSliderFov]
+  );
+
+  const handleSpeedChange = useCallback(
+    (e) => {
+      const newSpeed = parseFloat(e.target.value);
+      onSpeedChange(newSpeed);
+    },
+    [onSpeedChange]
   );
 
   return (
@@ -38,6 +51,19 @@ export default function CameraInfoPanel({ cameraInfo, viewer }) {
           value={sliderFov}
           onChange={handleFovChange}
           title="カメラの画角を変更"
+        />
+      </div>
+      <div className="speed-control">
+        <label htmlFor="speed-slider">移動速度: {cameraSpeed.toFixed(1)}</label>
+        <input
+          id="speed-slider"
+          type="range"
+          min="1"
+          max="100"
+          step="1"
+          value={cameraSpeed}
+          onChange={handleSpeedChange}
+          title="カメラの移動速度を変更"
         />
       </div>
     </>
