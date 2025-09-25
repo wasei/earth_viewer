@@ -61,6 +61,10 @@ export const useCameraControls = (viewer, cameraSpeed) => {
       }
     };
 
+    const handleMouseEnter = () => {
+      canvas.focus();
+    };
+
     const onTick = () => {
       if (!viewer || viewer.isDestroyed()) {
         return;
@@ -117,11 +121,16 @@ export const useCameraControls = (viewer, cameraSpeed) => {
 
     canvas.addEventListener("keydown", handleKeyDown);
     canvas.addEventListener("keyup", handleKeyUp);
+    canvas.addEventListener("mouseenter", handleMouseEnter);
+
     const removeTickListener = viewer.clock.onTick.addEventListener(onTick);
 
     return () => {
       canvas.removeEventListener("keydown", handleKeyDown);
       canvas.removeEventListener("keyup", handleKeyUp);
+
+      canvas.removeEventListener("mouseenter", handleMouseEnter);
+
       removeTickListener();
       if (handler && !handler.isDestroyed()) {
         handler.destroy();
