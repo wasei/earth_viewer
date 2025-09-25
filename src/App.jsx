@@ -15,6 +15,7 @@ import {
   setupCesium,
   CAMERA_FLY_DURATION,
   CAMERA_MOVE_SPEED,
+  INITIAL_CAMERA_POSITION,
 } from "./constants";
 import "./styles/App.css";
 
@@ -34,6 +35,11 @@ export default function App() {
   const restoreCamera = useCallback(
     (cameraObj) => {
       if (!viewer) return;
+
+      if (cameraObj.fov) {
+        viewer.camera.frustum.fov = Cesium.Math.toRadians(cameraObj.fov);
+      }
+
       viewer.camera.flyTo({
         destination: Cesium.Cartesian3.fromDegrees(
           cameraObj.lon,
@@ -51,23 +57,43 @@ export default function App() {
     [viewer]
   );
 
+  // --- ▼ここから修正▼ ---
   const handleSaveCurrent = useCallback(() => {
+    if (!viewer) return;
+
     const name = prompt(
       "このビューの名前を入力してください:",
       `ビュー ${savedCameras.length + 1}`
     );
     if (name) {
-      const newCamera = { id: Date.now(), name, ...cameraInfo };
+      // Reactの状態(cameraInfo)ではなく、viewerから直接最新の情報を取得する
+      const camera = viewer.camera;
+      const positionCartographic = Cesium.Cartographic.fromCartesian(
+        camera.position
+      );
+
+      const currentCameraState = {
+        lon: Cesium.Math.toDegrees(positionCartographic.longitude),
+        lat: Cesium.Math.toDegrees(positionCartographic.latitude),
+        height: positionCartographic.height,
+        heading: Cesium.Math.toDegrees(camera.heading),
+        pitch: Cesium.Math.toDegrees(camera.pitch),
+        roll: Cesium.Math.toDegrees(camera.roll),
+        fov: Cesium.Math.toDegrees(camera.frustum.fov),
+      };
+
+      const newCamera = { id: Date.now(), name, ...currentCameraState };
       setSavedCameras((prev) => [...prev, newCamera]);
     }
-  }, [cameraInfo, savedCameras]);
+  }, [viewer, savedCameras]); // 依存配列を cameraInfo から viewer に変更
+  // --- ▲ここまで修正▲ ---
 
   const exportKML = useCallback(() => {
     if (savedCameras.length === 0) {
       alert("エクスポートする保存済みビューがありません。");
       return;
     }
-    // ... (exportKMLのロジックは元のファイルと同じ)
+
     const kmlPlacemarks = savedCameras
       .map((cam) => {
         const tilt = 90.0 + cam.pitch;
@@ -84,13 +110,15 @@ export default function App() {
           <tilt>${tilt}</tilt>
           <range>${range}</range>
           <altitudeMode>absolute</altitudeMode>
+          <gx:horizFov>${cam.fov || INITIAL_CAMERA_POSITION.fov}</gx:horizFov>
         </LookAt>
       </Placemark>
     `;
       })
       .join("");
+
     const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
   <Document>
     <name>Cesium Views</name>
     ${kmlPlacemarks}
@@ -112,7 +140,6 @@ export default function App() {
   const importKML = useCallback((file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      // ... (importKMLのロジックは元のファイルと同じ)
       try {
         const kmlText = e.target.result;
         const parser = new DOMParser();
@@ -133,6 +160,12 @@ export default function App() {
               lookAt.querySelector("tilt")?.textContent || 0
             );
             const pitch = tilt - 90.0;
+
+            const fov = parseFloat(
+              lookAt.querySelector("horizFov")?.textContent ||
+                INITIAL_CAMERA_POSITION.fov
+            );
+
             return {
               id: Date.now() + index,
               name,
@@ -150,6 +183,7 @@ export default function App() {
               ),
               pitch,
               roll: 0,
+              fov,
             };
           })
           .filter(Boolean);
