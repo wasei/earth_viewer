@@ -21,9 +21,9 @@ export const INITIAL_CAMERA_POSITION = {
 // カメラの移動アニメーション時間
 export const CAMERA_FLY_DURATION = 1.0;
 // キーボード操作によるカメラの移動速度
-export const CAMERA_MOVE_SPEED = 10.0;
+export const CAMERA_MOVE_SPEED = 1.0;
 // キーボード操作によるカメラの垂直移動速度
-export const CAMERA_VERTICAL_SPEED = 10.0;
+export const CAMERA_VERTICAL_SPEED = 1.0;
 
 // Cesiumの初期設定
 export const setupCesium = () => {

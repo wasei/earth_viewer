@@ -58,9 +58,9 @@ export default function CameraInfoPanel({
         <input
           id="speed-slider"
           type="range"
-          min="1"
-          max="100"
-          step="1"
+          min="0.1"
+          max="7.0"
+          step="0.1"
           value={cameraSpeed}
           onChange={handleSpeedChange}
           title="カメラの移動速度を変更"
