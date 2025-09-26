@@ -1,0 +1,25 @@
+/* src/components/Footer.css */
+.app-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  font-size: 0.8rem;
+  color: #8b8b8b;
+}
+
+.app-footer a {
+  color: #a0a0a0;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.app-footer a:hover {
+  color: #009acc;
+  text-decoration: underline;
+}
+
+.footer-links {
+  display: flex;
+  gap: 1rem;
+}
