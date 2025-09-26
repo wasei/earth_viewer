@@ -233,7 +233,6 @@ export default function App() {
         />
         <ControlPanel
           ref={fileInputRef}
-          onSave={handleSaveCurrent}
           onImportClick={handleImportClick}
           onExport={exportKML}
           onFileChange={handleFileChange}
@@ -243,6 +242,7 @@ export default function App() {
       <CesiumViewer ref={containerRef} />
 
       <SavedViewsPanel
+        onSave={handleSaveCurrent}
         savedCameras={savedCameras}
         onRestore={restoreCamera}
         onDelete={handleDeleteSaved}
