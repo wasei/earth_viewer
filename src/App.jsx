@@ -10,6 +10,8 @@ import CesiumViewer from "./components/CesiumViewer";
 import CameraInfoPanel from "./components/CameraInfoPanel";
 import ControlPanel from "./components/ControlPanel";
 import SavedViewsPanel from "./components/SavedViewsPanel";
+import Footer from "./components/Footer"; // Footerコンポーネントをインポート
+import "./components/Footer.css"; // CSSをインポート (App.jsxで読み込む場合)
 
 import {
   setupCesium,
@@ -239,14 +241,19 @@ export default function App() {
         />
       </div>
 
-      <CesiumViewer ref={containerRef} />
+      <div className="main-content">
+        <CesiumViewer ref={containerRef} />
+      </div>
 
-      <SavedViewsPanel
-        onSave={handleSaveCurrent}
-        savedCameras={savedCameras}
-        onRestore={restoreCamera}
-        onDelete={handleDeleteSaved}
-      />
+      <div className="bottom-panel">
+        <SavedViewsPanel
+          onSave={handleSaveCurrent}
+          savedCameras={savedCameras}
+          onRestore={restoreCamera}
+          onDelete={handleDeleteSaved}
+        />{" "}
+        <Footer /> {/* ここにFooterを追加 */}
+      </div>
     </div>
   );
 }
