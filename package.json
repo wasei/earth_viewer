@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "cesium": "^1.133.1",
+    "egm96-universal": "^1.1.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
