@@ -7,6 +7,8 @@ export default function CameraInfoPanel({
   viewer,
   cameraSpeed,
   onSpeedChange,
+  isFreeCamera, // ★追加
+  onCameraModeChange, // ★追加
 }) {
   const [sliderFov, setSliderFov] = useState(cameraInfo.fov);
 
@@ -19,7 +21,6 @@ export default function CameraInfoPanel({
       if (!viewer) return;
       const newFovDegrees = parseFloat(e.target.value);
       setSliderFov(newFovDegrees);
-
       viewer.camera.frustum.fov = Cesium.Math.toRadians(newFovDegrees);
     },
     [viewer, setSliderFov]
@@ -31,6 +32,14 @@ export default function CameraInfoPanel({
       onSpeedChange(newSpeed);
     },
     [onSpeedChange]
+  );
+
+  // ★追加: モード切替のイベントハンドラ
+  const handleModeChange = useCallback(
+    (e) => {
+      onCameraModeChange(e.target.checked);
+    },
+    [onCameraModeChange]
   );
 
   return (
@@ -53,18 +62,37 @@ export default function CameraInfoPanel({
           title="カメラの画角を変更"
         />
       </div>
-      <div className="speed-control">
-        <label htmlFor="speed-slider">移動速度: {cameraSpeed.toFixed(1)}</label>
-        <input
-          id="speed-slider"
-          type="range"
-          min="0.1"
-          max="7.0"
-          step="0.1"
-          value={cameraSpeed}
-          onChange={handleSpeedChange}
-          title="カメラの移動速度を変更"
-        />
+
+      {isFreeCamera && (
+        <div className="speed-control">
+          <label htmlFor="speed-slider">
+            移動速度: {cameraSpeed.toFixed(1)}
+          </label>
+          <input
+            id="speed-slider"
+            type="range"
+            min="0.1"
+            max="7.0"
+            step="0.1"
+            value={cameraSpeed}
+            onChange={handleSpeedChange}
+            title="カメラの移動速度を変更"
+          />
+        </div>
+      )}
+
+      {/* ★変更: チェックボックスをトグルスイッチUIに変更 */}
+      <div className="camera-mode-control">
+        <span>オービット</span>
+        <label className="toggle-switch">
+          <input
+            type="checkbox"
+            checked={isFreeCamera}
+            onChange={handleModeChange}
+          />
+          <span className="toggle-slider"></span>
+        </label>
+        <span>フリー</span>
       </div>
     </>
   );

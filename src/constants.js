@@ -9,11 +9,11 @@ export const OSM_BUILDINGS_ASSET_ID = 2275207;
 
 // カメラの初期位置（東京駅周辺）
 export const INITIAL_CAMERA_POSITION = {
-  lon: 139.767052,
-  lat: 35.681167,
-  height: 1500,
+  lon: 137.865783,
+  lat: 38.324098,
+  height: 2500000,
   heading: 0,
-  pitch: -45,
+  pitch: -90,
   roll: 0,
   fov: 60,
 };

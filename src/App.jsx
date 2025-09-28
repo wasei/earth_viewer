@@ -10,8 +10,8 @@ import CesiumViewer from "./components/CesiumViewer";
 import CameraInfoPanel from "./components/CameraInfoPanel";
 import ControlPanel from "./components/ControlPanel";
 import SavedViewsPanel from "./components/SavedViewsPanel";
-import Footer from "./components/Footer"; // Footerコンポーネントをインポート
-import "./components/Footer.css"; // CSSをインポート (App.jsxで読み込む場合)
+import Footer from "./components/Footer";
+import "./components/Footer.css";
 
 import {
   setupCesium,
@@ -29,10 +29,12 @@ export default function App() {
   const fileInputRef = useRef(null);
   const [savedCameras, setSavedCameras] = useState([]);
   const [cameraSpeed, setCameraSpeed] = useState(CAMERA_MOVE_SPEED);
+  const [isFreeCamera, setIsFreeCamera] = useState(false); // ★追加: カメラモード管理用のstate
 
   const viewer = useCesium(containerRef);
   const cameraInfo = useCameraInfo(viewer);
-  useCameraControls(viewer, cameraSpeed);
+  // ★変更: isFreeCamera stateを渡して、モードに応じてフックの動作を制御
+  useCameraControls(viewer, cameraSpeed, isFreeCamera);
 
   const restoreCamera = useCallback(
     (cameraObj) => {
@@ -67,7 +69,6 @@ export default function App() {
       `ビュー ${savedCameras.length + 1}`
     );
     if (name) {
-      // Reactの状態(cameraInfo)ではなく、viewerから直接最新の情報を取得する
       const camera = viewer.camera;
       const positionCartographic = Cesium.Cartographic.fromCartesian(
         camera.position
@@ -232,6 +233,8 @@ export default function App() {
           viewer={viewer}
           cameraSpeed={cameraSpeed}
           onSpeedChange={handleSpeedChange}
+          isFreeCamera={isFreeCamera} // ★追加
+          onCameraModeChange={setIsFreeCamera} // ★追加
         />
         <ControlPanel
           ref={fileInputRef}
@@ -252,7 +255,7 @@ export default function App() {
           onRestore={restoreCamera}
           onDelete={handleDeleteSaved}
         />{" "}
-        <Footer /> {/* ここにFooterを追加 */}
+        <Footer />
       </div>
     </div>
   );
