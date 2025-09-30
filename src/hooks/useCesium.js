@@ -36,7 +36,11 @@ export const useCesium = (containerRef) => {
           vrButton: false,
         });
 
-        mountedViewer.scene.globe.enableLighting = true;
+        mountedViewer.scene.globe.enableLighting = true; // ライティングは有効のまま
+        mountedViewer.clock.shouldAnimate = false; // クロックの進行を停止
+        mountedViewer.clock.currentTime = Cesium.JulianDate.fromIso8601(
+          "2025-08-01T03:00:00Z"
+        );
 
         const sscController = mountedViewer.scene.screenSpaceCameraController;
         sscController.enableRotate = false;
