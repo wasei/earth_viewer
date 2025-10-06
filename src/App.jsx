@@ -43,14 +43,12 @@ export default function App() {
 
       const cesiumData = cameraObj.cesium;
 
-      // ★★★ ここから修正 ★★★
       // 1. 保存されている緯度経度から、その地点のEGM96ジオイド高を計算します。
       const geoidHeight = egm96.meanSeaLevel(cesiumData.lat, cesiumData.lon);
 
       // 2. 保存されている海抜高度 (cesiumData.height) にジオイド高を足し合わせ、
       //    Cesiumがカメラ位置として要求する楕円体高 (height WGS84) を算出します。
       const heightWGS84 = cesiumData.height + geoidHeight;
-      // ★★★ ここまで修正 ★★★
 
       if (cesiumData.fov) {
         viewer.camera.frustum.fov = Cesium.Math.toRadians(cesiumData.fov);
@@ -74,10 +72,6 @@ export default function App() {
     [viewer]
   );
 
-  // ★★★ ここから修正 (handleSaveCurrent) ★★★
-  // src/App.jsx
-
-  // ★★★ ここから修正 (handleSaveCurrent) ★★★
   const handleSaveCurrent = useCallback(() => {
     if (!viewer) return;
 
@@ -140,9 +134,8 @@ export default function App() {
       const heading = Cesium.Math.toDegrees(camera.heading);
       const pitch = Cesium.Math.toDegrees(camera.pitch);
 
-      // ★ 修正点: Cesiumのpitch (-90°=真下, 0°=水平) から
+      // Cesiumのpitch (-90°=真下, 0°=水平) から
       // KMLのtilt (0°=真下, 90°=水平) へ正しく変換する。
-      // これにより、isLookingUpフラグが不要になり、常に正しい角度が計算される。
       const tilt = pitch + 90.0;
       const fov = Cesium.Math.toDegrees(camera.frustum.fov);
 
@@ -182,19 +175,20 @@ export default function App() {
 
       setSavedCameras((prev) => [...prev, newCamera]);
     }
-  }, [viewer, savedCameras.length]); // 依存配列に savedCameras.length を追加
-  // ★★★ ここまで修正 (handleSaveCurrent) ★★★
-  // ★★★ ここまで修正 (handleSaveCurrent) ★★★
+  }, [viewer, savedCameras.length]);
 
+  // ★★★ ここから修正 (exportKML) ★★★
   const exportKML = useCallback(() => {
     if (savedCameras.length === 0) {
       alert("エクスポートする保存済みビューがありません。");
       return;
     }
 
+    // 保存された各視点から<Placemark>要素を生成する
     const kmlPlacemarks = savedCameras
       .map((cam) => {
         const kml = cam.kml;
+        // 各Placemarkに<name>タグを設定し、<LookAt>で視点を定義する
         return `
       <Placemark>
         <name>${cam.name}</name>
@@ -208,18 +202,22 @@ export default function App() {
           <altitudeMode>absolute</altitudeMode>
           <gx:horizFov>${kml.fov || INITIAL_CAMERA_POSITION.fov}</gx:horizFov>
         </LookAt>
-      </Placemark>
-    `;
+      </Placemark>`;
       })
       .join("");
 
+    // KML全体のコンテンツを生成する
     const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
   <Document>
-    <name>Cesium Views</name>
-    ${kmlPlacemarks}
+    <name>Cesium Saved Views</name>
+    <Folder>
+      <name>Saved Views</name>
+      ${kmlPlacemarks}
+    </Folder>
   </Document>
 </kml>`;
+
     const blob = new Blob([kmlContent], {
       type: "application/vnd.google-earth.kml+xml",
     });
@@ -232,6 +230,7 @@ export default function App() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, [savedCameras]);
+  // ★★★ ここまで修正 (exportKML) ★★★
 
   const importKML = useCallback((file) => {
     const reader = new FileReader();
@@ -273,7 +272,7 @@ export default function App() {
               lookAt.querySelector("range")?.textContent || 1000
             );
             const fov = parseFloat(
-              lookAt.querySelector("horizFov")?.textContent ||
+              lookAt.querySelector("gx|horizFov")?.textContent ||
                 INITIAL_CAMERA_POSITION.fov
             );
             const pitch = tilt - 90.0;
