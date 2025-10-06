@@ -34,20 +34,17 @@ export default function App() {
   const [isFreeCamera, setIsFreeCamera] = useState(false);
 
   const viewer = useCesium(containerRef);
-  const cameraInfo = useCameraInfo(viewer); // UI表示用として引き続き使用
+  const cameraInfo = useCameraInfo(viewer);
   useCameraControls(viewer, cameraSpeed, isFreeCamera);
 
+  // カメラを復元する関数
   const restoreCamera = useCallback(
     (cameraObj) => {
       if (!viewer) return;
-
       const cesiumData = cameraObj.cesium;
-
-      // 1. 保存されている緯度経度から、その地点のEGM96ジオイド高を計算します。
+      // アプリ内で保持している高さは「海抜(ASL)」。
+      // Cesiumにセットするためにジオイド高を足して「楕円体高」に変換する。
       const geoidHeight = egm96.meanSeaLevel(cesiumData.lat, cesiumData.lon);
-
-      // 2. 保存されている海抜高度 (cesiumData.height) にジオイド高を足し合わせ、
-      //    Cesiumがカメラ位置として要求する楕円体高 (height WGS84) を算出します。
       const heightWGS84 = cesiumData.height + geoidHeight;
 
       if (cesiumData.fov) {
@@ -55,7 +52,6 @@ export default function App() {
       }
 
       viewer.camera.flyTo({
-        // 算出した楕円体高 (heightWGS84) を使用します。
         destination: Cesium.Cartesian3.fromDegrees(
           cesiumData.lon,
           cesiumData.lat,
@@ -72,141 +68,89 @@ export default function App() {
     [viewer]
   );
 
+  // ★★★ 現在のビューを保存する関数 (修正あり) ★★★
   const handleSaveCurrent = useCallback(() => {
     if (!viewer) return;
-
     const camera = viewer.camera;
-    const scene = viewer.scene;
-
-    // 1. 画面中心からレイ（光線）を生成
-    const windowPosition = new Cesium.Cartesian2(
-      viewer.canvas.clientWidth / 2,
-      viewer.canvas.clientHeight / 2
-    );
-    const pickRay = camera.getPickRay(windowPosition);
-
-    // 2. 注視点（ターゲット）を決定する
-    let pickPosition;
-
-    // まず、地形との交点を試す（最も正確）
-    pickPosition = scene.globe.pick(pickRay, scene);
-
-    // 地形と交差しない場合（空や水平線を見ている）、地球の楕円体との交点を計算
-    if (!Cesium.defined(pickPosition)) {
-      const intersection = Cesium.IntersectionTests.rayEllipsoid(
-        pickRay,
-        Cesium.Ellipsoid.WGS84
-      );
-      if (intersection) {
-        pickPosition = Cesium.Ray.getPoint(pickRay, intersection.start);
-      }
-    }
-
-    // それでも交点が見つからない場合（地球の裏側を向いているなど）、最終手段としてカメラ直下をターゲットに
-    if (!Cesium.defined(pickPosition)) {
-      console.warn(
-        "注視点が地球上で特定できませんでした。カメラ直下の地点を基準に保存します。"
-      );
-      const cameraCartographic = Cesium.Cartographic.fromCartesian(
-        camera.position
-      );
-      pickPosition = Cesium.Cartesian3.fromRadians(
-        cameraCartographic.longitude,
-        cameraCartographic.latitude,
-        0.0
-      );
-    }
-
     const name = prompt(
       "このビューの名前を入力してください:",
       `ビュー ${savedCameras.length + 1}`
     );
+    if (!name) return;
 
-    if (name) {
-      // --- KML用データの計算 ---
-      const pickCartographic = Cesium.Cartographic.fromCartesian(pickPosition);
-      const targetLon = Cesium.Math.toDegrees(pickCartographic.longitude);
-      const targetLat = Cesium.Math.toDegrees(pickCartographic.latitude);
-      const geoidHeightKML = egm96.meanSeaLevel(targetLat, targetLon);
-      const targetAltitude = pickCartographic.height - geoidHeightKML;
+    // Cesiumの現在の位置（楕円体基準）を取得
+    const cameraCartographic = Cesium.Cartographic.fromCartesian(
+      camera.position
+    );
+    const cameraLon = Cesium.Math.toDegrees(cameraCartographic.longitude);
+    const cameraLat = Cesium.Math.toDegrees(cameraCartographic.latitude);
+    const cameraAltitudeEllipsoid = cameraCartographic.height;
 
-      const range = Cesium.Cartesian3.distance(camera.position, pickPosition);
-      const heading = Cesium.Math.toDegrees(camera.heading);
-      const pitch = Cesium.Math.toDegrees(camera.pitch);
+    // ジオイド高を計算し、海抜高度(ASL)を算出する
+    const geoidHeightCamera = egm96.meanSeaLevel(cameraLat, cameraLon);
+    const cameraAltitudeASL = cameraAltitudeEllipsoid - geoidHeightCamera;
 
-      // Cesiumのpitch (-90°=真下, 0°=水平) から
-      // KMLのtilt (0°=真下, 90°=水平) へ正しく変換する。
-      const tilt = pitch + 90.0;
-      const fov = Cesium.Math.toDegrees(camera.frustum.fov);
+    const heading = Cesium.Math.toDegrees(camera.heading);
+    const pitch = Cesium.Math.toDegrees(camera.pitch);
+    const roll = 0; // 反転防止のためRollを0に固定
+    const tilt = pitch + 90.0;
+    const fov = Cesium.Math.toDegrees(camera.frustum.fov);
 
-      // --- アプリ内復元用のデータ計算 ---
-      const cameraCartographic = Cesium.Cartographic.fromCartesian(
-        camera.position
-      );
-      const cameraLon = Cesium.Math.toDegrees(cameraCartographic.longitude);
-      const cameraLat = Cesium.Math.toDegrees(cameraCartographic.latitude);
-      const geoidHeightCamera = egm96.meanSeaLevel(cameraLat, cameraLon);
-      const cameraAltitudeASL = cameraCartographic.height - geoidHeightCamera;
-
-      const newCamera = {
-        id: Date.now(),
-        name,
-        // アプリ内復元用データ
-        cesium: {
-          lon: cameraLon,
-          lat: cameraLat,
-          height: cameraAltitudeASL,
-          heading: heading,
-          pitch: pitch,
-          roll: Cesium.Math.toDegrees(camera.roll),
-          fov: fov,
-        },
-        // KMLエクスポート用データ
-        kml: {
-          lon: targetLon,
-          lat: targetLat,
-          altitude: targetAltitude,
-          heading: heading,
-          tilt: tilt,
-          range: range,
-          fov: fov,
-        },
-      };
-
-      setSavedCameras((prev) => [...prev, newCamera]);
-    }
+    const newCamera = {
+      id: Date.now(),
+      name,
+      // アプリ内データ：海抜高度を使用
+      cesium: {
+        lon: cameraLon,
+        lat: cameraLat,
+        height: cameraAltitudeASL,
+        heading,
+        pitch,
+        roll,
+        fov,
+      },
+      // KMLエクスポートデータ：
+      // ★修正点★ Google Earthのabsoluteは海抜を期待するため、ASLをそのまま渡す。
+      kml: {
+        lon: cameraLon,
+        lat: cameraLat,
+        altitude: cameraAltitudeASL, // ここを楕円体高から海抜高度に変更
+        heading,
+        tilt,
+        roll,
+        fov,
+      },
+    };
+    setSavedCameras((prev) => [...prev, newCamera]);
   }, [viewer, savedCameras.length]);
 
-  // ★★★ ここから修正 (exportKML) ★★★
+  // KMLエクスポート関数（変更なし、handleSaveCurrentのデータを使うため）
   const exportKML = useCallback(() => {
     if (savedCameras.length === 0) {
       alert("エクスポートする保存済みビューがありません。");
       return;
     }
-
-    // 保存された各視点から<Placemark>要素を生成する
     const kmlPlacemarks = savedCameras
       .map((cam) => {
         const kml = cam.kml;
-        // 各Placemarkに<name>タグを設定し、<LookAt>で視点を定義する
-        return `
-      <Placemark>
-        <name>${cam.name}</name>
-        <LookAt>
+        // 常に<Camera>タグを使用。altitudeには海抜高度が入る。
+        const viewTag = `
+        <Camera>
           <longitude>${kml.lon}</longitude>
           <latitude>${kml.lat}</latitude>
           <altitude>${kml.altitude}</altitude>
           <heading>${kml.heading}</heading>
           <tilt>${kml.tilt}</tilt>
-          <range>${kml.range}</range>
+          <roll>${kml.roll}</roll>
           <altitudeMode>absolute</altitudeMode>
-          <gx:horizFov>${kml.fov || INITIAL_CAMERA_POSITION.fov}</gx:horizFov>
-        </LookAt>
+          <gx:horizFov>${kml.fov}</gx:horizFov>
+        </Camera>`;
+        return `
+      <Placemark>
+        <name>${cam.name}</name>${viewTag}
       </Placemark>`;
       })
       .join("");
-
-    // KML全体のコンテンツを生成する
     const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
   <Document>
@@ -217,7 +161,6 @@ export default function App() {
     </Folder>
   </Document>
 </kml>`;
-
     const blob = new Blob([kmlContent], {
       type: "application/vnd.google-earth.kml+xml",
     });
@@ -230,8 +173,8 @@ export default function App() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, [savedCameras]);
-  // ★★★ ここまで修正 (exportKML) ★★★
 
+  // ★★★ KMLインポート関数 (修正あり) ★★★
   const importKML = useCallback((file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -240,6 +183,7 @@ export default function App() {
         const parser = new DOMParser();
         const kmlDoc = parser.parseFromString(kmlText, "text/xml");
         const placemarks = kmlDoc.querySelectorAll("Placemark");
+
         if (placemarks.length === 0) {
           alert("KMLファイルに有効な<Placemark>が見つかりませんでした。");
           return;
@@ -250,91 +194,68 @@ export default function App() {
             const name =
               pm.querySelector("name")?.textContent ||
               `インポートビュー ${index + 1}`;
-            const lookAt = pm.querySelector("LookAt");
-            if (!lookAt) return null;
+            const camera = pm.querySelector("Camera");
+            // LookAtのサポートは削除し、Cameraに一本化して混乱を防ぐ
 
-            const lon = parseFloat(
-              lookAt.querySelector("longitude")?.textContent || 0
-            );
-            const lat = parseFloat(
-              lookAt.querySelector("latitude")?.textContent || 0
-            );
-            const altitude = parseFloat(
-              lookAt.querySelector("altitude")?.textContent || 1000
-            );
-            const heading = parseFloat(
-              lookAt.querySelector("heading")?.textContent || 0
-            );
-            const tilt = parseFloat(
-              lookAt.querySelector("tilt")?.textContent || 0
-            );
-            const range = parseFloat(
-              lookAt.querySelector("range")?.textContent || 1000
-            );
-            const fov = parseFloat(
-              lookAt.querySelector("gx|horizFov")?.textContent ||
-                INITIAL_CAMERA_POSITION.fov
-            );
-            const pitch = tilt - 90.0;
-
-            const targetPosition = Cesium.Cartesian3.fromDegrees(
-              lon,
-              lat,
-              altitude
-            );
-            const hpr = new Cesium.HeadingPitchRange(
-              Cesium.Math.toRadians(heading),
-              Cesium.Math.toRadians(pitch),
-              range
-            );
-            const cameraPosition =
-              Cesium.Transforms.headingPitchRangeToFixedFrame(
-                targetPosition,
-                hpr,
-                Cesium.Ellipsoid.WGS84,
-                Cesium.Transforms.eastNorthUpToFixedFrame,
-                new Cesium.Cartesian3()
+            if (camera) {
+              const lon = parseFloat(
+                camera.querySelector("longitude")?.textContent || 0
               );
-            const cameraCartographic =
-              Cesium.Cartographic.fromCartesian(cameraPosition);
+              const lat = parseFloat(
+                camera.querySelector("latitude")?.textContent || 0
+              );
+              // ★修正点★ KMLの値は海抜高度(ASL)として読み込む
+              const altitudeKML = parseFloat(
+                camera.querySelector("altitude")?.textContent || 0
+              );
 
-            // インポート時も、カメラ位置のEGM96補正を行うことで、UI表示との一貫性を保つ
-            const importedCameraLon = Cesium.Math.toDegrees(
-              cameraCartographic.longitude
-            );
-            const importedCameraLat = Cesium.Math.toDegrees(
-              cameraCartographic.latitude
-            );
-            const geoidHeight = egm96.meanSeaLevel(
-              importedCameraLat,
-              importedCameraLon
-            );
-            const cameraAltitudeASL = cameraCartographic.height - geoidHeight;
+              const heading = parseFloat(
+                camera.querySelector("heading")?.textContent || 0
+              );
+              const tilt = parseFloat(
+                camera.querySelector("tilt")?.textContent || 0
+              );
+              // インポート時もRollは0を強制する（整合性のため）
+              const roll = 0;
+              const fov = parseFloat(
+                camera.querySelector("gx\\:horizFov, horizFov")?.textContent ||
+                  INITIAL_CAMERA_POSITION.fov
+              );
 
-            return {
-              id: Date.now() + index,
-              name,
-              cesium: {
-                lon: importedCameraLon,
-                lat: importedCameraLat,
-                height: cameraAltitudeASL, // EGM96補正後の高度を保存
-                heading: heading,
-                pitch: pitch,
-                roll: 0,
-                fov: fov,
-              },
-              kml: {
-                lon,
-                lat,
-                altitude,
-                heading,
-                tilt,
-                range,
-                fov,
-              },
-            };
+              // アプリ内では海抜高度をそのまま使う
+              const altitudeASL = altitudeKML;
+              const pitch = tilt - 90.0;
+
+              return {
+                id: Date.now() + index,
+                name,
+                // アプリ内復元用データ
+                cesium: {
+                  lon,
+                  lat,
+                  height: altitudeASL,
+                  heading,
+                  pitch,
+                  roll,
+                  fov,
+                },
+                // KMLエクスポート用データ（インポートした値を保持）
+                kml: {
+                  lon,
+                  lat,
+                  altitude: altitudeKML,
+                  heading,
+                  tilt,
+                  roll,
+                  fov,
+                },
+              };
+            }
+            // <Camera>を持たないPlacemarkはスキップ
+            return null;
           })
           .filter(Boolean);
+
         setSavedCameras((prev) => [...prev, ...newCameras]);
         alert(`${newCameras.length}個のビューをインポートしました。`);
       } catch (error) {
@@ -390,18 +311,16 @@ export default function App() {
           onFileChange={handleFileChange}
         />
       </div>
-
       <div className="main-content">
         <CesiumViewer ref={containerRef} />
       </div>
-
       <div className="bottom-panel">
         <SavedViewsPanel
           onSave={handleSaveCurrent}
           savedCameras={savedCameras}
           onRestore={restoreCamera}
           onDelete={handleDeleteSaved}
-        />{" "}
+        />
         <Footer />
       </div>
     </div>
