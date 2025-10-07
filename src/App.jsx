@@ -42,8 +42,6 @@ export default function App() {
     (cameraObj) => {
       if (!viewer) return;
       const cesiumData = cameraObj.cesium;
-      // アプリ内で保持している高さは「海抜(ASL)」。
-      // Cesiumにセットするためにジオイド高を足して「楕円体高」に変換する。
       const geoidHeight = egm96.meanSeaLevel(cesiumData.lat, cesiumData.lon);
       const heightWGS84 = cesiumData.height + geoidHeight;
 
@@ -68,7 +66,7 @@ export default function App() {
     [viewer]
   );
 
-  // ★★★ 現在のビューを保存する関数 (修正版) ★★★
+  // 現在のビューを保存する関数 (ピッチ/Tilt計算は修正済み)
   const handleSaveCurrent = useCallback(() => {
     if (!viewer) return;
     const camera = viewer.camera;
@@ -78,7 +76,6 @@ export default function App() {
     );
     if (!name) return;
 
-    // Cesiumの現在の位置（楕円体基準）を取得
     const cameraCartographic = Cesium.Cartographic.fromCartesian(
       camera.position
     );
@@ -86,55 +83,42 @@ export default function App() {
     const cameraLat = Cesium.Math.toDegrees(cameraCartographic.latitude);
     const cameraAltitudeEllipsoid = cameraCartographic.height;
 
-    // ジオイド高を計算し、海抜高度(ASL)を算出する
     const geoidHeightCamera = egm96.meanSeaLevel(cameraLat, cameraLon);
     const cameraAltitudeASL = cameraAltitudeEllipsoid - geoidHeightCamera;
 
-    // --- 向きの計算を修正 ---
-
-    // Headingはcameraプロパティから取得
     const heading = Cesium.Math.toDegrees(camera.heading);
-    // Rollは意図しない傾きを防ぐため0に固定
     const roll = 0;
-    // FOVもcameraプロパティから取得
     const fov = Cesium.Math.toDegrees(camera.frustum.fov);
 
-    // Tiltをカメラのベクトルから直接計算する（より正確な方法）
-    // 1. カメラの位置における天頂（真上）ベクトルを計算
     const zenithVector = Cesium.Cartesian3.normalize(
       camera.position,
       new Cesium.Cartesian3()
     );
-    // 2. 天頂ベクトルとカメラの視線ベクトルのなす角を計算。これがKMLのTiltに相当する。
     const angleRad = Cesium.Cartesian3.angleBetween(
       zenithVector,
       camera.direction
     );
     const tilt = Cesium.Math.toDegrees(angleRad);
-
-    // 3. アプリ内部で利用するCesiumのPitchは、計算したTiltから逆算して整合性を保つ
     const pitch = tilt - 90.0;
 
     const newCamera = {
       id: Date.now(),
       name,
-      // アプリ内データ：海抜高度を使用
       cesium: {
         lon: cameraLon,
         lat: cameraLat,
         height: cameraAltitudeASL,
         heading,
-        pitch, // Tiltから逆算したpitch
+        pitch,
         roll,
         fov,
       },
-      // KMLエクスポートデータ
       kml: {
         lon: cameraLon,
         lat: cameraLat,
         altitude: cameraAltitudeASL,
         heading,
-        tilt, // ベクトル計算から得られた正確なtilt
+        tilt,
         roll,
         fov,
       },
@@ -142,43 +126,47 @@ export default function App() {
     setSavedCameras((prev) => [...prev, newCamera]);
   }, [viewer, savedCameras.length]);
 
-  // KMLエクスポート関数（変更なし）
+  // ★★★ KMLエクスポート関数 (Google Earth Pro形式に修正) ★★★
   const exportKML = useCallback(() => {
     if (savedCameras.length === 0) {
       alert("エクスポートする保存済みビューがありません。");
       return;
     }
-    const kmlPlacemarks = savedCameras
+
+    const kmlTours = savedCameras
       .map((cam) => {
         const kml = cam.kml;
-        // 常に<Camera>タグを使用。altitudeには海抜高度が入る。
-        const viewTag = `
-        <Camera>
-          <longitude>${kml.lon}</longitude>
-          <latitude>${kml.lat}</latitude>
-          <altitude>${kml.altitude}</altitude>
-          <heading>${kml.heading}</heading>
-          <tilt>${kml.tilt}</tilt>
-          <roll>${kml.roll}</roll>
-          <altitudeMode>absolute</altitudeMode>
-          <gx:horizFov>${kml.fov}</gx:horizFov>
-        </Camera>`;
+        // 各ビューを <gx:Tour> 形式で出力
         return `
-      <Placemark>
-        <name>${cam.name}</name>${viewTag}
-      </Placemark>`;
+    <gx:Tour>
+      <name>${cam.name}</name>
+      <gx:Playlist>
+        <gx:FlyTo>
+          <Camera>
+            <longitude>${kml.lon}</longitude>
+            <latitude>${kml.lat}</latitude>
+            <altitude>${kml.altitude}</altitude>
+            <heading>${kml.heading}</heading>
+            <tilt>${kml.tilt}</tilt>
+            <roll>${kml.roll}</roll>
+            <gx:altitudeMode>absolute</gx:altitudeMode>
+            <gx:horizFov>${kml.fov}</gx:horizFov>
+          </Camera>
+        </gx:FlyTo>
+      </gx:Playlist>
+    </gx:Tour>`;
       })
       .join("");
+
+    // KML全体の構造をサンプルに合わせる
     const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
-  <Document>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2" xmlns:kml="http://www.opengis.net/kml/2.2" xmlns:atom="http://www.w3.org/2005/Atom">
+  <Folder>
     <name>Cesium Saved Views</name>
-    <Folder>
-      <name>Saved Views</name>
-      ${kmlPlacemarks}
-    </Folder>
-  </Document>
+    <open>1</open>${kmlTours}
+  </Folder>
 </kml>`;
+
     const blob = new Blob([kmlContent], {
       type: "application/vnd.google-earth.kml+xml",
     });
@@ -192,7 +180,7 @@ export default function App() {
     URL.revokeObjectURL(url);
   }, [savedCameras]);
 
-  // KMLインポート関数（変更なし）
+  // ★★★ KMLインポート関数 (新旧フォーマット対応に修正) ★★★
   const importKML = useCallback((file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -200,75 +188,83 @@ export default function App() {
         const kmlText = e.target.result;
         const parser = new DOMParser();
         const kmlDoc = parser.parseFromString(kmlText, "text/xml");
-        const placemarks = kmlDoc.querySelectorAll("Placemark");
 
-        if (placemarks.length === 0) {
-          alert("KMLファイルに有効な<Placemark>が見つかりませんでした。");
+        // <Camera> タグを直接すべて探し、そこから情報を組み立てる
+        const cameraNodes = kmlDoc.querySelectorAll("Camera");
+
+        if (cameraNodes.length === 0) {
+          alert("KMLファイルに有効なカメラビューが見つかりませんでした。");
           return;
         }
 
-        const newCameras = Array.from(placemarks)
-          .map((pm, index) => {
-            const name =
-              pm.querySelector("name")?.textContent ||
-              `インポートビュー ${index + 1}`;
-            const camera = pm.querySelector("Camera");
+        const newCameras = Array.from(cameraNodes)
+          .map((camera, index) => {
+            // 親を辿って名前を探す (<gx:Tour> or <Placemark>)
+            const tourParent = camera.closest("Tour, gx\\:Tour");
+            const placemarkParent = camera.closest("Placemark");
 
-            if (camera) {
-              const lon = parseFloat(
-                camera.querySelector("longitude")?.textContent || 0
-              );
-              const lat = parseFloat(
-                camera.querySelector("latitude")?.textContent || 0
-              );
-              const altitudeKML = parseFloat(
-                camera.querySelector("altitude")?.textContent || 0
-              );
-
-              const heading = parseFloat(
-                camera.querySelector("heading")?.textContent || 0
-              );
-              const tilt = parseFloat(
-                camera.querySelector("tilt")?.textContent || 0
-              );
-              const roll = 0;
-              const fov = parseFloat(
-                camera.querySelector("gx\\:horizFov, horizFov")?.textContent ||
-                  INITIAL_CAMERA_POSITION.fov
-              );
-
-              const altitudeASL = altitudeKML;
-              const pitch = tilt - 90.0;
-
-              return {
-                id: Date.now() + index,
-                name,
-                cesium: {
-                  lon,
-                  lat,
-                  height: altitudeASL,
-                  heading,
-                  pitch,
-                  roll,
-                  fov,
-                },
-                kml: {
-                  lon,
-                  lat,
-                  altitude: altitudeKML,
-                  heading,
-                  tilt,
-                  roll,
-                  fov,
-                },
-              };
+            let name = `インポートビュー ${index + 1}`;
+            if (tourParent) {
+              name = tourParent.querySelector("name")?.textContent || name;
+            } else if (placemarkParent) {
+              name = placemarkParent.querySelector("name")?.textContent || name;
             }
-            return null;
+
+            const lon = parseFloat(
+              camera.querySelector("longitude")?.textContent || 0
+            );
+            const lat = parseFloat(
+              camera.querySelector("latitude")?.textContent || 0
+            );
+            const altitudeKML = parseFloat(
+              camera.querySelector("altitude")?.textContent || 0
+            );
+            const heading = parseFloat(
+              camera.querySelector("heading")?.textContent || 0
+            );
+            const tilt = parseFloat(
+              camera.querySelector("tilt")?.textContent || 0
+            );
+            const roll = 0; // Rollは0に固定
+            const fov = parseFloat(
+              camera.querySelector("gx\\:horizFov, horizFov")?.textContent ||
+                INITIAL_CAMERA_POSITION.fov
+            );
+
+            const altitudeASL = altitudeKML;
+            const pitch = tilt - 90.0;
+
+            return {
+              id: Date.now() + index,
+              name,
+              cesium: {
+                lon,
+                lat,
+                height: altitudeASL,
+                heading,
+                pitch,
+                roll,
+                fov,
+              },
+              kml: {
+                lon,
+                lat,
+                altitude: altitudeKML,
+                heading,
+                tilt,
+                roll,
+                fov,
+              },
+            };
           })
           .filter(Boolean);
 
-        setSavedCameras((prev) => [...prev, ...newCameras]);
-        alert(`${newCameras.length}個のビューをインポートしました。`);
+        if (newCameras.length > 0) {
+          setSavedCameras((prev) => [...prev, ...newCameras]);
+          alert(`${newCameras.length}個のビューをインポートしました。`);
+        } else {
+          alert("KMLファイルから有効なカメラ情報を抽出できませんでした。");
+        }
       } catch (error) {
         console.error("KMLファイルのパースに失敗しました。", error);
         alert("KMLファイルの読み込みに失敗しました。");
@@ -276,6 +272,8 @@ export default function App() {
     };
     reader.readAsText(file);
   }, []);
+
+  // --- これ以降のコンポーネント部分は変更なし ---
 
   const handleFileChange = useCallback(
     (e) => {
