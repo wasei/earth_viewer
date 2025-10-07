@@ -68,7 +68,7 @@ export default function App() {
     [viewer]
   );
 
-  // ★★★ 現在のビューを保存する関数 (修正あり) ★★★
+  // ★★★ 現在のビューを保存する関数 (修正版) ★★★
   const handleSaveCurrent = useCallback(() => {
     if (!viewer) return;
     const camera = viewer.camera;
@@ -90,11 +90,30 @@ export default function App() {
     const geoidHeightCamera = egm96.meanSeaLevel(cameraLat, cameraLon);
     const cameraAltitudeASL = cameraAltitudeEllipsoid - geoidHeightCamera;
 
+    // --- 向きの計算を修正 ---
+
+    // Headingはcameraプロパティから取得
     const heading = Cesium.Math.toDegrees(camera.heading);
-    const pitch = Cesium.Math.toDegrees(camera.pitch);
-    const roll = 0; // 反転防止のためRollを0に固定
-    const tilt = pitch + 90.0;
+    // Rollは意図しない傾きを防ぐため0に固定
+    const roll = 0;
+    // FOVもcameraプロパティから取得
     const fov = Cesium.Math.toDegrees(camera.frustum.fov);
+
+    // Tiltをカメラのベクトルから直接計算する（より正確な方法）
+    // 1. カメラの位置における天頂（真上）ベクトルを計算
+    const zenithVector = Cesium.Cartesian3.normalize(
+      camera.position,
+      new Cesium.Cartesian3()
+    );
+    // 2. 天頂ベクトルとカメラの視線ベクトルのなす角を計算。これがKMLのTiltに相当する。
+    const angleRad = Cesium.Cartesian3.angleBetween(
+      zenithVector,
+      camera.direction
+    );
+    const tilt = Cesium.Math.toDegrees(angleRad);
+
+    // 3. アプリ内部で利用するCesiumのPitchは、計算したTiltから逆算して整合性を保つ
+    const pitch = tilt - 90.0;
 
     const newCamera = {
       id: Date.now(),
@@ -105,18 +124,17 @@ export default function App() {
         lat: cameraLat,
         height: cameraAltitudeASL,
         heading,
-        pitch,
+        pitch, // Tiltから逆算したpitch
         roll,
         fov,
       },
-      // KMLエクスポートデータ：
-      // ★修正点★ Google Earthのabsoluteは海抜を期待するため、ASLをそのまま渡す。
+      // KMLエクスポートデータ
       kml: {
         lon: cameraLon,
         lat: cameraLat,
-        altitude: cameraAltitudeASL, // ここを楕円体高から海抜高度に変更
+        altitude: cameraAltitudeASL,
         heading,
-        tilt,
+        tilt, // ベクトル計算から得られた正確なtilt
         roll,
         fov,
       },
@@ -124,7 +142,7 @@ export default function App() {
     setSavedCameras((prev) => [...prev, newCamera]);
   }, [viewer, savedCameras.length]);
 
-  // KMLエクスポート関数（変更なし、handleSaveCurrentのデータを使うため）
+  // KMLエクスポート関数（変更なし）
   const exportKML = useCallback(() => {
     if (savedCameras.length === 0) {
       alert("エクスポートする保存済みビューがありません。");
@@ -174,7 +192,7 @@ export default function App() {
     URL.revokeObjectURL(url);
   }, [savedCameras]);
 
-  // ★★★ KMLインポート関数 (修正あり) ★★★
+  // KMLインポート関数（変更なし）
   const importKML = useCallback((file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -195,7 +213,6 @@ export default function App() {
               pm.querySelector("name")?.textContent ||
               `インポートビュー ${index + 1}`;
             const camera = pm.querySelector("Camera");
-            // LookAtのサポートは削除し、Cameraに一本化して混乱を防ぐ
 
             if (camera) {
               const lon = parseFloat(
@@ -204,7 +221,6 @@ export default function App() {
               const lat = parseFloat(
                 camera.querySelector("latitude")?.textContent || 0
               );
-              // ★修正点★ KMLの値は海抜高度(ASL)として読み込む
               const altitudeKML = parseFloat(
                 camera.querySelector("altitude")?.textContent || 0
               );
@@ -215,21 +231,18 @@ export default function App() {
               const tilt = parseFloat(
                 camera.querySelector("tilt")?.textContent || 0
               );
-              // インポート時もRollは0を強制する（整合性のため）
               const roll = 0;
               const fov = parseFloat(
                 camera.querySelector("gx\\:horizFov, horizFov")?.textContent ||
                   INITIAL_CAMERA_POSITION.fov
               );
 
-              // アプリ内では海抜高度をそのまま使う
               const altitudeASL = altitudeKML;
               const pitch = tilt - 90.0;
 
               return {
                 id: Date.now() + index,
                 name,
-                // アプリ内復元用データ
                 cesium: {
                   lon,
                   lat,
@@ -239,7 +252,6 @@ export default function App() {
                   roll,
                   fov,
                 },
-                // KMLエクスポート用データ（インポートした値を保持）
                 kml: {
                   lon,
                   lat,
@@ -251,7 +263,6 @@ export default function App() {
                 },
               };
             }
-            // <Camera>を持たないPlacemarkはスキップ
             return null;
           })
           .filter(Boolean);
