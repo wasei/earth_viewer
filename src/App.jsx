@@ -66,7 +66,7 @@ export default function App() {
     [viewer]
   );
 
-  // 現在のビューを保存する関数 (ピッチ/Tilt計算は修正済み)
+  // ★★★ 修正箇所: KMLエクスポートのロジックを簡素化 ★★★
   const handleSaveCurrent = useCallback(() => {
     if (!viewer) return;
     const camera = viewer.camera;
@@ -86,24 +86,20 @@ export default function App() {
     const geoidHeightCamera = egm96.meanSeaLevel(cameraLat, cameraLon);
     const cameraAltitudeASL = cameraAltitudeEllipsoid - geoidHeightCamera;
 
+    // --- Cesiumのカメラパラメータを直接取得 ---
     const heading = Cesium.Math.toDegrees(camera.heading);
-    const roll = 0;
+    const pitch = Cesium.Math.toDegrees(camera.pitch);
+    const roll = Cesium.Math.toDegrees(camera.roll);
     const fov = Cesium.Math.toDegrees(camera.frustum.fov);
 
-    const zenithVector = Cesium.Cartesian3.normalize(
-      camera.position,
-      new Cesium.Cartesian3()
-    );
-    const angleRad = Cesium.Cartesian3.angleBetween(
-      zenithVector,
-      camera.direction
-    );
-    const tilt = Cesium.Math.toDegrees(angleRad);
-    const pitch = tilt - 90.0;
+    // --- KML用の値を計算 ---
+    // 複雑な条件分岐をなくし、常に直接的な変換を行う
+    const tiltKML = pitch + 90.0;
 
     const newCamera = {
       id: Date.now(),
       name,
+      // アプリ内での復元には、Cesiumの生の値をそのまま使う
       cesium: {
         lon: cameraLon,
         lat: cameraLat,
@@ -113,20 +109,21 @@ export default function App() {
         roll,
         fov,
       },
+      // KMLエクスポートには、標準的な変換を適用した値を使う
       kml: {
         lon: cameraLon,
         lat: cameraLat,
         altitude: cameraAltitudeASL,
-        heading,
-        tilt,
-        roll,
+        heading: heading, // headingはそのまま
+        tilt: tiltKML, // tiltは常に pitch + 90
+        roll: roll, // rollはそのまま
         fov,
       },
     };
     setSavedCameras((prev) => [...prev, newCamera]);
   }, [viewer, savedCameras.length]);
 
-  // ★★★ KMLエクスポート関数 (Google Earth Pro形式に修正) ★★★
+  // KMLエクスポート関数 (変更なし)
   const exportKML = useCallback(() => {
     if (savedCameras.length === 0) {
       alert("エクスポートする保存済みビューがありません。");
@@ -180,7 +177,7 @@ export default function App() {
     URL.revokeObjectURL(url);
   }, [savedCameras]);
 
-  // ★★★ KMLインポート関数 (新旧フォーマット対応に修正) ★★★
+  // KMLインポート関数 (変更なし)
   const importKML = useCallback((file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
