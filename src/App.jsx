@@ -13,7 +13,6 @@ import CameraInfoPanel from "./components/CameraInfoPanel";
 import ControlPanel from "./components/ControlPanel";
 import SavedViewsPanel from "./components/SavedViewsPanel";
 import Footer from "./components/Footer";
-import "./components/Footer.css";
 
 import {
   setupCesium,
@@ -21,6 +20,8 @@ import {
   CAMERA_MOVE_SPEED,
   INITIAL_CAMERA_POSITION,
 } from "./constants";
+import { normalizeDegrees } from "./utils/cesiumHelpers";
+
 import "./styles/App.css";
 
 // アプリケーションの初期化処理
@@ -37,7 +38,6 @@ export default function App() {
   const cameraInfo = useCameraInfo(viewer);
   useCameraControls(viewer, cameraSpeed, isFreeCamera);
 
-  // カメラを復元する関数
   const restoreCamera = useCallback(
     (cameraObj) => {
       if (!viewer) return;
@@ -66,7 +66,6 @@ export default function App() {
     [viewer]
   );
 
-  // 現在のビューを保存する関数 (ピッチ/Tilt計算は修正済み)
   const handleSaveCurrent = useCallback(() => {
     if (!viewer) return;
     const camera = viewer.camera;
@@ -86,20 +85,58 @@ export default function App() {
     const geoidHeightCamera = egm96.meanSeaLevel(cameraLat, cameraLon);
     const cameraAltitudeASL = cameraAltitudeEllipsoid - geoidHeightCamera;
 
-    const heading = Cesium.Math.toDegrees(camera.heading);
-    const roll = 0;
-    const fov = Cesium.Math.toDegrees(camera.frustum.fov);
+    // ★★★ 修正箇所: KML変換ロジックを最終版に更新 ★★★
 
-    const zenithVector = Cesium.Cartesian3.normalize(
-      camera.position,
+    // カメラの基本ベクトルをローカル座標系（East-North-Up）に変換
+    const transform = Cesium.Transforms.eastNorthUpToFixedFrame(
+      camera.position
+    );
+    const inverseTransform = Cesium.Matrix4.inverse(
+      transform,
+      new Cesium.Matrix4()
+    );
+    const localDirection = Cesium.Matrix4.multiplyByPointAsVector(
+      inverseTransform,
+      camera.direction,
       new Cesium.Cartesian3()
     );
-    const angleRad = Cesium.Cartesian3.angleBetween(
-      zenithVector,
-      camera.direction
+    const localUp = Cesium.Matrix4.multiplyByPointAsVector(
+      inverseTransform,
+      camera.up,
+      new Cesium.Cartesian3()
     );
-    const tilt = Cesium.Math.toDegrees(angleRad);
-    const pitch = tilt - 90.0;
+
+    // Tiltの計算：真下(0度)から水平(90度)までの角度を正確に計算
+    // localDirectionと真下ベクトル(0,0,-1)との間の角度を求める
+    const kmlTilt = Cesium.Math.toDegrees(Math.acos(-localDirection.z));
+
+    let kmlHeading;
+    const epsilon = 1.0; // 判定の閾値（1度）
+
+    // Tiltが真下(0)または真上(180)に近いか判定
+    if (kmlTilt < epsilon || Math.abs(kmlTilt - 180.0) < epsilon) {
+      // 真下/真上ビューの場合：Headingはカメラの「上方向」ベクトルから決定する
+      // これにより、画面の回転が正しくHeadingに反映される
+      kmlHeading = Cesium.Math.toDegrees(Math.atan2(localUp.x, localUp.y));
+    } else {
+      // 通常の斜めビューの場合：Headingはカメラの「視線方向」ベクトルから決定する
+      kmlHeading = Cesium.Math.toDegrees(
+        Math.atan2(localDirection.x, localDirection.y)
+      );
+    }
+
+    if (kmlHeading < 0) {
+      kmlHeading += 360.0;
+    }
+
+    // Rollは常に0に固定して、意図しない回転を完全に防ぐ
+    const kmlRoll = 0;
+
+    // アプリ内復元用のCesiumの生の値も保存しておく
+    const cesiumHeading = Cesium.Math.toDegrees(camera.heading);
+    const cesiumPitch = Cesium.Math.toDegrees(camera.pitch);
+    const cesiumRoll = Cesium.Math.toDegrees(camera.roll);
+    const cesiumFov = Cesium.Math.toDegrees(camera.frustum.fov);
 
     const newCamera = {
       id: Date.now(),
@@ -108,25 +145,24 @@ export default function App() {
         lon: cameraLon,
         lat: cameraLat,
         height: cameraAltitudeASL,
-        heading,
-        pitch,
-        roll,
-        fov,
+        heading: cesiumHeading,
+        pitch: cesiumPitch,
+        roll: cesiumRoll,
+        fov: cesiumFov,
       },
       kml: {
         lon: cameraLon,
         lat: cameraLat,
         altitude: cameraAltitudeASL,
-        heading,
-        tilt,
-        roll,
-        fov,
+        heading: kmlHeading,
+        tilt: kmlTilt,
+        roll: kmlRoll,
+        fov: cesiumFov,
       },
     };
     setSavedCameras((prev) => [...prev, newCamera]);
   }, [viewer, savedCameras.length]);
 
-  // ★★★ KMLエクスポート関数 (Google Earth Pro形式に修正) ★★★
   const exportKML = useCallback(() => {
     if (savedCameras.length === 0) {
       alert("エクスポートする保存済みビューがありません。");
@@ -136,7 +172,6 @@ export default function App() {
     const kmlTours = savedCameras
       .map((cam) => {
         const kml = cam.kml;
-        // 各ビューを <gx:Tour> 形式で出力
         return `
     <gx:Tour>
       <name>${cam.name}</name>
@@ -158,7 +193,6 @@ export default function App() {
       })
       .join("");
 
-    // KML全体の構造をサンプルに合わせる
     const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2" xmlns:kml="http://www.opengis.net/kml/2.2" xmlns:atom="http://www.w3.org/2005/Atom">
   <Folder>
@@ -180,7 +214,6 @@ export default function App() {
     URL.revokeObjectURL(url);
   }, [savedCameras]);
 
-  // ★★★ KMLインポート関数 (新旧フォーマット対応に修正) ★★★
   const importKML = useCallback((file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -188,8 +221,6 @@ export default function App() {
         const kmlText = e.target.result;
         const parser = new DOMParser();
         const kmlDoc = parser.parseFromString(kmlText, "text/xml");
-
-        // <Camera> タグを直接すべて探し、そこから情報を組み立てる
         const cameraNodes = kmlDoc.querySelectorAll("Camera");
 
         if (cameraNodes.length === 0) {
@@ -199,10 +230,8 @@ export default function App() {
 
         const newCameras = Array.from(cameraNodes)
           .map((camera, index) => {
-            // 親を辿って名前を探す (<gx:Tour> or <Placemark>)
             const tourParent = camera.closest("Tour, gx\\:Tour");
             const placemarkParent = camera.closest("Placemark");
-
             let name = `インポートビュー ${index + 1}`;
             if (tourParent) {
               name = tourParent.querySelector("name")?.textContent || name;
@@ -219,20 +248,24 @@ export default function App() {
             const altitudeKML = parseFloat(
               camera.querySelector("altitude")?.textContent || 0
             );
-            const heading = parseFloat(
+            const headingKML = parseFloat(
               camera.querySelector("heading")?.textContent || 0
             );
-            const tilt = parseFloat(
+            const tiltKML = parseFloat(
               camera.querySelector("tilt")?.textContent || 0
             );
-            const roll = 0; // Rollは0に固定
+            const rollKML = parseFloat(
+              camera.querySelector("roll")?.textContent || 0
+            );
             const fov = parseFloat(
               camera.querySelector("gx\\:horizFov, horizFov")?.textContent ||
                 INITIAL_CAMERA_POSITION.fov
             );
 
             const altitudeASL = altitudeKML;
-            const pitch = tilt - 90.0;
+            const heading = normalizeDegrees(headingKML);
+            const pitch = tiltKML - 90.0;
+            const roll = normalizeDegrees(rollKML);
 
             return {
               id: Date.now() + index,
@@ -250,9 +283,9 @@ export default function App() {
                 lon,
                 lat,
                 altitude: altitudeKML,
-                heading,
-                tilt,
-                roll,
+                heading: headingKML,
+                tilt: tiltKML,
+                roll: rollKML,
                 fov,
               },
             };
@@ -272,8 +305,6 @@ export default function App() {
     };
     reader.readAsText(file);
   }, []);
-
-  // --- これ以降のコンポーネント部分は変更なし ---
 
   const handleFileChange = useCallback(
     (e) => {
@@ -320,9 +351,11 @@ export default function App() {
           onFileChange={handleFileChange}
         />
       </div>
+
       <div className="main-content">
         <CesiumViewer ref={containerRef} />
       </div>
+
       <div className="bottom-panel">
         <SavedViewsPanel
           onSave={handleSaveCurrent}

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import * as Cesium from "cesium";
 
-// ★緯度経度を度・分・秒（DMS）形式に変換するヘルパー関数
+// 緯度経度を度・分・秒（DMS）形式に変換するヘルパー関数
 const convertToDMS = (dd, type) => {
   const absolute = Math.abs(dd);
   const degrees = Math.floor(absolute);
@@ -60,57 +60,80 @@ export default function CameraInfoPanel({
   );
 
   return (
-    <>
-      {/* ★変更箇所: toFixed(6) から convertToDMS 関数呼び出しに変更 */}
-      <div>緯度: {convertToDMS(cameraInfo.lat, "lat")}</div>
-      <div>経度: {convertToDMS(cameraInfo.lon, "lon")}</div>
-      <div>高度: {Math.round(cameraInfo.height)}m</div>
-      <div>方位: {Math.round(cameraInfo.heading)}°</div>
-      <div>ピッチ: {Math.round(cameraInfo.pitch)}°</div>
-      <div className="fov-control">
-        <label htmlFor="fov-slider">画角: {Math.round(sliderFov)}°</label>
-        <input
-          id="fov-slider"
-          type="range"
-          min="10"
-          max="120"
-          step="1"
-          value={sliderFov}
-          onChange={handleFovChange}
-          title="カメラの画角を変更"
-        />
+    <div className="camera-info-container">
+      <div className="info-group">
+        <div className="info-item">
+          <span className="info-label">緯度:</span>
+          <span className="info-value">
+            {convertToDMS(cameraInfo.lat, "lat")}
+          </span>
+        </div>
+        <div className="info-item">
+          <span className="info-label">経度:</span>
+          <span className="info-value">
+            {convertToDMS(cameraInfo.lon, "lon")}
+          </span>
+        </div>
+        <div className="info-item">
+          <span className="info-label">高度:</span>
+          <span className="info-value">{Math.round(cameraInfo.height)}m</span>
+        </div>
+        <div className="info-item">
+          <span className="info-label">方位:</span>
+          <span className="info-value">{Math.round(cameraInfo.heading)}°</span>
+        </div>
+        <div className="info-item">
+          <span className="info-label">ピッチ:</span>
+          <span className="info-value">{Math.round(cameraInfo.pitch)}°</span>
+        </div>
       </div>
 
-      {isFreeCamera && (
-        <div className="speed-control">
-          <label htmlFor="speed-slider">
-            移動速度: {cameraSpeed.toFixed(1)}
-          </label>
+      <div className="info-group">
+        <div className="control-item">
+          <label htmlFor="fov-slider">画角: {Math.round(sliderFov)}°</label>
           <input
-            id="speed-slider"
+            id="fov-slider"
             type="range"
-            min="0.1"
-            max="7.0"
-            step="0.1"
-            value={cameraSpeed}
-            onChange={handleSpeedChange}
-            title="カメラの移動速度を変更"
+            min="10"
+            max="120"
+            step="1"
+            value={sliderFov}
+            onChange={handleFovChange}
+            title="カメラの画角を変更"
           />
         </div>
-      )}
 
-      <div className="camera-mode-control">
-        <span>オービット</span>
-        <label className="toggle-switch">
-          <input
-            type="checkbox"
-            checked={isFreeCamera}
-            onChange={handleModeChange}
-          />
-          <span className="toggle-slider"></span>
-        </label>
-        <span>フリー</span>
+        {isFreeCamera && (
+          <div className="control-item">
+            <label htmlFor="speed-slider">
+              移動速度: {cameraSpeed.toFixed(1)}
+            </label>
+            <input
+              id="speed-slider"
+              type="range"
+              min="0.1"
+              max="7.0"
+              step="0.1"
+              value={cameraSpeed}
+              onChange={handleSpeedChange}
+              title="カメラの移動速度を変更"
+            />
+          </div>
+        )}
+
+        <div className="camera-mode-control">
+          <span>オービット</span>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={isFreeCamera}
+              onChange={handleModeChange}
+            />
+            <span className="toggle-slider"></span>
+          </label>
+          <span>フリー</span>
+        </div>
       </div>
-    </>
+    </div>
   );
 }
