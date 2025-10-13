@@ -1,112 +1,33 @@
-/* 全体のスタイル */
-body {
-  background-color: #1e1e1e;
-  color: #f0f0f0;
-  font-family: sans-serif;
-  margin: 0;
-  overflow: hidden; /* ページ全体のスクロールを無効化 */
-}
+/* src/styles/App.css */
 
-#root,
+/* --- 全体レイアウト --- */
 .cesium-app-root {
-  width: 100vw;
-  height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* 子要素がはみ出すのを防ぐ */
+  height: 100vh;
+  overflow: hidden;
 }
 
-/* トップバー */
+/* --- トップバー --- */
 .topbar {
   display: flex;
+  flex-wrap: wrap; /* 画面が狭い時に折り返す */
   justify-content: space-between;
   align-items: center;
-  background-color: #252526;
-  padding: 0.5rem 1rem;
-  border-bottom: 1px solid #3e3e42;
-  flex-shrink: 0; /* トップバーが縮まないようにする */
-}
-
-.topbar > div {
-  display: flex;
-  align-items: center;
   gap: 1rem;
-}
-
-.topbar .controls {
-  gap: 0.5rem;
-}
-
-/* トップバーのラベルと入力要素 */
-.fov-control,
-.speed-control {
-  display: flex;
-  align-items: center;
-}
-
-.fov-control label,
-.speed-control label {
-  margin-right: 0.5rem;
-  white-space: nowrap;
-}
-
-input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100px;
-  height: 5px;
-  background: #3e3e42;
-  outline: none;
-  opacity: 0.7;
-  transition: opacity 0.2s;
-}
-
-input[type="range"]:hover {
-  opacity: 1;
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 15px;
-  height: 15px;
-  background: #007acc;
-  cursor: pointer;
-  border-radius: 50%;
-}
-
-input[type="range"]::-moz-range-thumb {
-  width: 15px;
-  height: 15px;
-  background: #007acc;
-  cursor: pointer;
-  border-radius: 50%;
-}
-
-/* ボタンの共通スタイル */
-button {
-  background-color: #3e3e42;
-  color: #f0f0f0;
-  border: 1px solid #555;
+  background-color: var(--color-panel-background);
   padding: 0.5rem 1rem;
-  cursor: pointer;
-  transition: background-color 0.3s;
-  border-radius: 4px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
-button:hover {
-  background-color: #555;
-}
-
-/* ▼▼▼ 変更点 ▼▼▼ */
-/* メインのCesium画面のコンテナ */
+/* --- メインコンテンツ --- */
 .main-content {
-  position: relative; /* #cesiumContainerの絶対配置の基準点 */
-  flex-grow: 1; /* 残りの高さいっぱいに広がる */
-  min-height: 0; /* Flexアイテムが縮小できなくなる問題を回避 */
+  position: relative;
+  flex-grow: 1;
+  min-height: 0;
 }
 
-/* メインのCesium画面 */
 #cesiumContainer {
   position: absolute;
   top: 0;
@@ -114,139 +35,116 @@ button:hover {
   width: 100%;
   height: 100%;
 }
-/* ▲▲▲ 変更点 ▲▲▲ */
 
-/* 下部の保存リスト */
-.saved-list {
-  display: flex;
-  align-items: center;
-  background-color: #252526;
-  padding: 0.5rem 1rem;
-  border-top: 1px solid #3e3e42;
-  flex-shrink: 0; /* 下部セクションが縮まないようにする */
-  gap: 1rem; /* ボタンとリスト間のスペース */
-}
-
-/* 現在地を保存ボタン */
-.saved-list button {
-  flex-shrink: 0; /* ボタンが潰れないようにする */
-}
-
-.saved-list button:hover {
-  background-color: #005a9e;
-}
-
-/* 保存ボタンの「+」アイコン */
-.saved-list button::before {
-  content: "+";
-  font-size: 1.2rem;
-  font-weight: bold;
-}
-
-/* 保存されたビューのスクロールコンテナ */
-.saved-views-container {
-  display: flex; /* アイテムを横並びにする */
-  align-items: center;
-  gap: 0.8rem; /* アイテム間のスペース */
-  overflow-x: auto; /* 横方向のスクロールを有効にする */
-  flex-grow: 1;
-  margin-left: 1rem;
-  padding-bottom: 8px; /* スクロールバーのためのスペース */
-}
-
-/* 保存された各ビューのアイテム */
-.saved-view-item {
-  padding: 0.5rem 1rem;
-  background-color: #3e3e42;
-  border-radius: 4px;
-  white-space: nowrap; /* テキストを改行させない */
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.saved-view-item:hover {
-  background-color: #4f4f53;
-}
-
-/* 保存されたビューがない場合のメッセージ */
-.no-saved-views {
-  margin-left: 1rem;
-  color: #8b8b8b;
-  white-space: nowrap;
-}
-
-/* スクロールバーのスタイル */
-.saved-views-container::-webkit-scrollbar {
-  height: 8px;
-}
-
-.saved-views-container::-webkit-scrollbar-track {
-  background: #3e3e42;
-  border-radius: 4px;
-}
-
-.saved-views-container::-webkit-scrollbar-thumb {
-  background: #555;
-  border-radius: 4px;
-}
-
-.saved-views-container::-webkit-scrollbar-thumb:hover {
-  background: #777;
-}
-/* App.css の末尾に追記 */
-
+/* --- ボトムパネル --- */
 .bottom-panel {
   display: flex;
   flex-direction: column;
-  background-color: #252526;
-  border-top: 1px solid #3e3e42;
+  background-color: var(--color-panel-background);
+  border-top: 1px solid var(--color-border);
   flex-shrink: 0;
-  padding: 0 1rem; /* 左右のパディング */
+  padding: 0 1rem;
 }
 
-/* SavedViewsPanel自体の背景色やボーダーは不要になる */
-.saved-list {
-  background-color: transparent;
-  border-top: none;
-  padding: 0.5rem 0; /* 上下のパディングを調整 */
+/* --- CameraInfoPanel スタイル (トップバー内) --- */
+.camera-info-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
 }
 
-/* Footerコンポーネントのための調整 */
-.app-footer {
-  padding: 0.5rem 0;
-  border-top: 1px solid #3e3e42; /* saved-listとの間に区切り線を入れる */
+.info-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.25rem 0;
 }
 
-/* App.css の末尾に追記 */
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 180px; /* UIのずれを防ぐための最小幅 */
+}
+
+.info-label {
+  color: var(--color-text-secondary);
+  font-size: 0.9em;
+}
+
+.info-value {
+  font-family: var(--font-monospace);
+  color: var(--color-text-primary);
+  font-size: 0.9em;
+}
+
+/* --- コントロール要素 --- */
+.control-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.control-item label {
+  white-space: nowrap;
+  color: var(--color-text-secondary);
+  font-size: 0.9em;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100px;
+  height: 5px;
+  background: var(--color-element-background);
+  outline: none;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  border-radius: 3px;
+}
+input[type="range"]:hover {
+  opacity: 1;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  background: var(--color-accent);
+  cursor: pointer;
+  border-radius: 50%;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  background: var(--color-accent);
+  cursor: pointer;
+  border-radius: 50%;
+}
 
 /* --- カメラモード切替トグルスイッチ --- */
 .camera-mode-control {
   display: flex;
   align-items: center;
-  gap: 0.5rem; /* 要素間のスペース */
+  gap: 0.5rem;
 }
-
 .camera-mode-control span {
   font-size: 0.9em;
-  color: #cccccc;
+  color: var(--color-text-secondary);
 }
-
-/* トグルスイッチのコンテナ */
 .toggle-switch {
   position: relative;
   display: inline-block;
   width: 50px;
   height: 24px;
 }
-
-/* デフォルトのチェックボックスを非表示にする */
 .toggle-switch input {
   opacity: 0;
   width: 0;
   height: 0;
 }
-
-/* スイッチの背景（スライダー） */
 .toggle-slider {
   position: absolute;
   cursor: pointer;
@@ -254,12 +152,10 @@ button:hover {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: #555; /* オフ（オービット）の色 */
+  background-color: var(--color-element-background);
   transition: 0.4s;
-  border-radius: 24px; /* 角を丸くする */
+  border-radius: 24px;
 }
-
-/* スイッチのつまみ（円） */
 .toggle-slider:before {
   position: absolute;
   content: "";
@@ -267,17 +163,76 @@ button:hover {
   width: 18px;
   left: 3px;
   bottom: 3px;
-  background-color: #f0f0f0;
+  background-color: var(--color-text-primary);
   transition: 0.4s;
   border-radius: 50%;
 }
-
-/* チェックされた時（オン/フリーモード）のスタイル */
 input:checked + .toggle-slider {
-  background-color: #007acc; /* オン（フリー）の色 */
+  background-color: var(--color-accent);
+}
+input:checked + .toggle-slider:before {
+  transform: translateX(26px);
 }
 
-input:checked + .toggle-slider:before {
-  /* つまみを右に移動させる */
-  transform: translateX(26px);
+/* --- ControlPanel スタイル (トップバー内) --- */
+.controls {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0; /* 折り返しの際にボタンが縮まないように */
+}
+
+/* --- SavedViewsPanel スタイル (ボトムパネル内) --- */
+.saved-list {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0;
+  gap: 1rem;
+}
+.saved-list button {
+  flex-shrink: 0;
+}
+.saved-views-container {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  overflow-x: auto;
+  flex-grow: 1;
+  padding-bottom: 8px; /* スクロールバーのためのスペース */
+}
+.saved-view-item {
+  padding: 0.5rem 1rem;
+  background-color: var(--color-element-background);
+  border-radius: 4px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.saved-view-item:hover {
+  background-color: #4f4f53;
+}
+.no-saved-views {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* スクロールバーのスタイル */
+.saved-views-container::-webkit-scrollbar {
+  height: 8px;
+}
+.saved-views-container::-webkit-scrollbar-track {
+  background: var(--color-panel-background);
+  border-radius: 4px;
+}
+.saved-views-container::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+.saved-views-container::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+
+/* --- Footer スタイル (ボトムパネル内) --- */
+.app-footer {
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--color-border);
 }

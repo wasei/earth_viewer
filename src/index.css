@@ -1,8 +1,24 @@
-/* index.css */
+/* :rootでカラーパレットを定義 */
+:root {
+  --color-background: #1e1e1e;
+  --color-panel-background: #252526;
+  --color-element-background: #37373d;
+  --color-border: #333333;
+  --color-text-primary: #cccccc;
+  --color-text-secondary: #9e9e9e;
+  --color-accent: #007acc;
+  --color-accent-hover: #0099e6;
+
+  --font-primary: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --font-monospace: "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+    monospace;
+}
+
 body {
-  background-color: #1e1e1e;
-  color: #f0f0f0;
-  font-family: sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-primary);
   margin: 0;
   overflow: hidden; /* ページ全体のスクロールを無効化 */
 }
@@ -18,15 +34,68 @@ body {
 
 /* 共通のボタンスタイル */
 button {
-  background-color: #3e3e42;
-  color: #f0f0f0;
-  border: 1px solid #555;
+  background-color: var(--color-element-background);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
   padding: 0.5rem 1rem;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: background-color 0.3s, border-color 0.3s;
   border-radius: 4px;
+  white-space: nowrap;
 }
 
 button:hover {
-  background-color: #555;
+  background-color: var(--color-accent);
+  border-color: var(--color-accent-hover);
+} /* index.css */
+
+/* :rootでカラーパレットを定義 */
+:root {
+  --color-background: #1e1e1e;
+  --color-panel-background: #252526;
+  --color-element-background: #37373d;
+  --color-border: #333333;
+  --color-text-primary: #cccccc;
+  --color-text-secondary: #9e9e9e;
+  --color-accent: #007acc;
+  --color-accent-hover: #0099e6;
+
+  --font-primary: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --font-monospace: "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+    monospace;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-primary);
+  margin: 0;
+  overflow: hidden; /* ページ全体のスクロールを無効化 */
+}
+
+/* #root要素も画面全体に広げる */
+#root,
+.cesium-app-root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 共通のボタンスタイル */
+button {
+  background-color: var(--color-element-background);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s, border-color 0.3s;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+button:hover {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent-hover);
 }
