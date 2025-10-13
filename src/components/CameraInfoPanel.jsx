@@ -2,13 +2,31 @@
 import React, { useState, useEffect, useCallback } from "react";
 import * as Cesium from "cesium";
 
+// ★緯度経度を度・分・秒（DMS）形式に変換するヘルパー関数
+const convertToDMS = (dd, type) => {
+  const absolute = Math.abs(dd);
+  const degrees = Math.floor(absolute);
+  const minutesNotTruncated = (absolute - degrees) * 60;
+  const minutes = Math.floor(minutesNotTruncated);
+  const seconds = ((minutesNotTruncated - minutes) * 60).toFixed(2);
+
+  let direction;
+  if (type === "lat") {
+    direction = dd >= 0 ? "N" : "S"; // 北緯/南緯
+  } else {
+    direction = dd >= 0 ? "E" : "W"; // 東経/西経
+  }
+
+  return `${degrees}° ${minutes}' ${seconds}" ${direction}`;
+};
+
 export default function CameraInfoPanel({
   cameraInfo,
   viewer,
   cameraSpeed,
   onSpeedChange,
-  isFreeCamera, // ★追加
-  onCameraModeChange, // ★追加
+  isFreeCamera,
+  onCameraModeChange,
 }) {
   const [sliderFov, setSliderFov] = useState(cameraInfo.fov);
 
@@ -34,7 +52,6 @@ export default function CameraInfoPanel({
     [onSpeedChange]
   );
 
-  // ★追加: モード切替のイベントハンドラ
   const handleModeChange = useCallback(
     (e) => {
       onCameraModeChange(e.target.checked);
@@ -44,8 +61,9 @@ export default function CameraInfoPanel({
 
   return (
     <>
-      <div>緯度: {cameraInfo.lat.toFixed(6)}</div>
-      <div>経度: {cameraInfo.lon.toFixed(6)}</div>
+      {/* ★変更箇所: toFixed(6) から convertToDMS 関数呼び出しに変更 */}
+      <div>緯度: {convertToDMS(cameraInfo.lat, "lat")}</div>
+      <div>経度: {convertToDMS(cameraInfo.lon, "lon")}</div>
       <div>高度: {Math.round(cameraInfo.height)}m</div>
       <div>方位: {Math.round(cameraInfo.heading)}°</div>
       <div>ピッチ: {Math.round(cameraInfo.pitch)}°</div>
@@ -81,7 +99,6 @@ export default function CameraInfoPanel({
         </div>
       )}
 
-      {/* ★変更: チェックボックスをトグルスイッチUIに変更 */}
       <div className="camera-mode-control">
         <span>オービット</span>
         <label className="toggle-switch">
