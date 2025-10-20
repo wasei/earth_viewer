@@ -7,7 +7,11 @@ const Footer = () => {
     <footer className="app-footer">
       <span>
         Developed by{" "}
-        <a href="https://" target="_blank" rel="noopener noreferrer">
+        <a
+          href="https://kazumasa-editor.netlify.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           Yuki Kazumasa
         </a>
       </span>
