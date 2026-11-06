@@ -1,0 +1,119 @@
+:root {
+  --navy: rgba(8, 19, 44, 0.8);
+  --navy-solid: #08132c;
+  --line: rgba(150, 180, 255, 0.2);
+  --text: #e8eefc;
+  --dim: #8fa0c4;
+  --accent: #f0883e; /* 測量マーカーのオレンジ。ON状態と主要ボタン、北の表示だけに使う */
+  --font: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif;
+}
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--navy-solid); font-family: var(--font); color: var(--text); font-size: 13px; }
+#cesium { position: fixed; inset: 0; }
+[hidden] { display: none !important; }
+
+/* Cesium標準ウィジェットは隠す。クレジット(帰属表示)は必須なので、下のパネルの上に出す */
+.cesium-viewer-toolbar { display: none; }
+.cesium-viewer-bottom { bottom: calc(var(--strip-h, 0px) + 8px) !important; }
+
+/* 全体レイアウト: 3列×3行のグリッド。各パネルは自分の枠にだけ置くので重ならない */
+#ui {
+  position: fixed; inset: 0; padding: 8px; box-sizing: border-box; pointer-events: none;
+  display: grid; gap: 8px;
+  grid-template-columns: 236px minmax(0, 1fr) 300px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+#ui > * { pointer-events: auto; }
+.info { grid-column: 1; grid-row: 1 / 3; align-self: start; }
+.compass { grid-column: 2; grid-row: 1; justify-self: center; width: min(640px, 100%); }
+.side { grid-column: 3; grid-row: 1 / 3; align-self: start; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.strip { grid-column: 1 / -1; grid-row: 3; }
+@media (max-width: 960px) {
+  #ui { grid-template-columns: 200px minmax(0, 1fr); }
+  .side { grid-column: 2; grid-row: 2; justify-self: end; width: 260px; }
+  .compass { grid-column: 2; }
+}
+
+.panel { background: var(--navy); border: 1px solid var(--line); border-radius: 8px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+button, select, input { font: inherit; color: var(--text); }
+button, select { background: rgba(255,255,255,.08); border: 1px solid var(--line); border-radius: 5px; padding: 5px 10px; cursor: pointer; }
+button:hover, select:hover { background: rgba(255,255,255,.16); }
+select option { color: #111; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #1a1208; font-weight: 600; }
+button.primary:hover { filter: brightness(1.08); }
+
+/* 左: カメラ情報 */
+.info { padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; }
+.hero { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 4px; }
+.hero-v { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.l { color: var(--dim); }
+.v { font-variant-numeric: tabular-nums; }
+.row input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+
+/* 上: コンパス帯（白い目盛りが流れる。左右は紺に溶ける） */
+.compass { position: relative; height: 62px; padding: 0; overflow: hidden; border-radius: 10px; background: linear-gradient(180deg, rgba(8,19,44,.7), rgba(8,19,44,.4)); -webkit-mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); mask-image: linear-gradient(90deg, transparent, #000 16%, #000 84%, transparent); border-color: transparent; }
+.compass-cvs { display: block; width: 100%; height: 42px; margin-top: 2px; }
+.compass-center { position: absolute; left: 50%; top: 0; height: 44px; width: 1px; background: var(--accent); opacity: .9; }
+.compass-read { text-align: center; font-size: 13px; font-weight: 600; letter-spacing: .08em; font-variant-numeric: tabular-nums; margin-top: 1px; }
+
+/* 右: 検索とヒント */
+.search { position: relative; padding: 6px; }
+.search-input { width: 100%; box-sizing: border-box; background: rgba(255,255,255,.08); border: 1px solid var(--line); border-radius: 5px; padding: 7px 10px; }
+.search-input::placeholder { color: var(--dim); }
+.results { display: flex; flex-direction: column; margin-top: 6px; max-height: 240px; overflow-y: auto; }
+.result { text-align: left; border: none; background: none; border-radius: 4px; padding: 6px 8px; }
+.hint { padding: 6px 10px; }
+.hint summary { cursor: pointer; color: var(--dim); }
+.hrow { display: grid; grid-template-columns: 9.5em 1fr; gap: 8px; padding: 2px 0; }
+kbd { font: inherit; }
+
+/* 下: ビュー一覧 */
+.strip { padding: 8px; display: flex; gap: 12px; align-items: stretch; }
+.actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.cards { display: flex; gap: 8px; overflow-x: auto; flex: 1; align-items: flex-start; }
+.card { flex: 0 0 150px; position: relative; cursor: pointer; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: rgba(255,255,255,.05); }
+.card:hover { border-color: var(--accent); }
+.card.dragging { opacity: .35; }
+.card.drop-before::before, .card.drop-after::after { content: ""; position: absolute; top: 0; bottom: 0; width: 3px; background: var(--accent); z-index: 1; }
+.card.drop-before::before { left: 0; }
+.card.drop-after::after { right: 0; }
+.card img, .noimg { display: block; width: 100%; height: 84px; object-fit: cover; background: var(--navy-solid); }
+.meta { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 4px 6px; }
+.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rename { width: 100%; background: var(--navy-solid); border: 1px solid var(--accent); border-radius: 3px; padding: 1px 4px; }
+.del { padding: 0 6px; background: none; border: none; color: var(--dim); }
+.del.armed { color: #fff; background: #b3402a; border-radius: 3px; }
+.empty { color: var(--dim); align-self: center; }
+
+/* ガイド（クロス） */
+.guide { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none !important; }
+.cross { position: absolute; inset: 0; pointer-events: none; }
+.cross::before, .cross::after { content: ""; position: absolute; background: rgba(255,255,255,.55); }
+.cross::before { left: 0; right: 0; top: 50%; height: 1px; }
+.cross::after { top: 0; bottom: 0; left: 50%; width: 1px; }
+
+.toast { position: fixed; left: 50%; bottom: calc(var(--strip-h, 0px) + 40px); transform: translateX(-50%); background: var(--navy); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; pointer-events: none !important; }
+
+.fatal { position: fixed; left: 50%; top: 28%; transform: translateX(-50%); width: min(520px, 90vw); padding: 16px 20px; line-height: 1.7; }
+.fatal strong { color: var(--accent); }
+
+.small { font-size: 11.5px; color: var(--dim); }
+
+/* 移動速度プリセット */
+.group { display: flex; flex-direction: column; gap: 5px; padding: 5px 8px 7px; border: 1px solid var(--line); border-radius: 6px; }
+.group > .l { margin-top: -1px; }
+.segs { display: flex; gap: 4px; }
+.seg { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 2px 4px; font-size: 11px; }
+.seg svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.seg.on, .chip.on { background: var(--accent); border-color: var(--accent); color: #1a1208; font-weight: 600; }
+
+/* ON/OFFチップ（クロス・地上高ロック・高さ制限） */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { font-size: 11.5px; padding: 3px 9px; border-radius: 999px; }
+
+
+/* 初回の3D読み込み表示（画面中央を邪魔しない右下寄りの小さな表示。クリックで閉じる） */
+.loading { position: fixed; left: 50%; top: 84px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; }
+.spin { width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
